@@ -1,4 +1,5 @@
- "use client";
+"use client";
+
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { format, isSameDay } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -6,23 +7,64 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { LoginForm } from "@/components/LoginForm";
+
+type OwnerRole = "me" | "sibling";
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   date: Date;
+  createdByRole?: OwnerRole | null;
 }
 
 export default function Home() {
+  const [session, setSession] = useState<{ user: { id: string } } | null>(null);
+  const [profileRole, setProfileRole] = useState<OwnerRole | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
   const notifiedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s as { user: { id: string } } | null);
+      setAuthLoading(false);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s as { user: { id: string } } | null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setProfileRole(null);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to fetch profile", error);
+          setProfileRole(null);
+          return;
+        }
+        setProfileRole((data?.role as OwnerRole) ?? null);
+      });
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session) return;
     fetchTodos();
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
@@ -30,16 +72,17 @@ export default function Home() {
     const t = setInterval(() => checkAndNotifyOverdue(), 60_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session]);
 
   useEffect(() => {
+    if (!session) return;
     fetchTodos();
-  }, [selectedDate]);
+  }, [session, selectedDate]);
 
   async function fetchTodos() {
     const { data, error } = await supabase
       .from("todos")
-      .select("id,title,completed,date")
+      .select("id,title,completed,date,created_by_role")
       .order("date", { ascending: true });
     if (error) {
       console.error("Failed to fetch todos", error);
@@ -51,6 +94,7 @@ export default function Home() {
       text: r.title,
       completed: r.completed,
       date: new Date(r.date),
+      createdByRole: r.created_by_role ?? null,
     }));
     setTodos(mapped);
   }
@@ -80,7 +124,10 @@ export default function Home() {
   }, [todos]);
 
   const handleSubmit = async () => {
-    console.log("handleSubmit invoked", { newTodoText, selectedDate });
+    if (!session?.user?.id || !profileRole) {
+      console.error("handleSubmit: not logged in or profile role missing");
+      return;
+    }
     if (newTodoText.trim() === "") {
       console.error("handleSubmit: newTodoText is empty");
       return;
@@ -88,29 +135,30 @@ export default function Home() {
     const title = newTodoText.trim();
     const date = format(selectedDate, "yyyy-MM-dd");
     try {
-      const { data, error } = await supabase.from("todos").insert([{ title, date }]).select();
+      const { data, error } = await supabase
+        .from("todos")
+        .insert([{ title, date, user_id: session.user.id, created_by_role: profileRole }])
+        .select();
       if (error) {
         console.error("supabase insert error", error);
+        alert("予定の追加に失敗しました: " + (error.message || JSON.stringify(error)));
         return;
       }
       if (data && data[0]) {
-        const r: any = data[0];
-        // 追加直後に最新データを取得してカレンダーを更新
         try {
           await fetchTodos();
         } catch (e) {
-          // fetchTodos 内で alert を出すのでここはログのみ
           console.error("fetchTodos after insert error", e);
         }
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("Todoを追加しました", { body: title });
         }
       } else {
-        console.warn("handleSubmit: no data returned from insert, refetching");
         fetchTodos();
       }
     } catch (err) {
       console.error("handleSubmit unexpected error", err);
+      alert("予定の追加に失敗しました");
     } finally {
       setNewTodoText("");
     }
@@ -141,10 +189,41 @@ export default function Home() {
     if (e.key === "Enter") handleSubmit();
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <h1 className="text-2xl font-bold text-center mb-2">カレンダーTodoリスト</h1>
+        <LoginForm />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8 text-center">カレンダーTodoリスト</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {profileRole === "me" ? "私" : profileRole === "sibling" ? "弟" : "?"}
+            </span>
+            <Button variant="ghost" size="icon" onClick={handleLogout} title="ログアウト">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -159,6 +238,10 @@ export default function Home() {
               <CardTitle>{format(selectedDate, "yyyy年M月d日")} のTodo</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-red-500" /> 私</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-500" /> 弟</span>
+              </div>
               <div className="flex gap-2">
                 <Input placeholder="新しいTodoを追加..." value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1" />
                 <Button onClick={handleSubmit} size="icon">
@@ -170,7 +253,16 @@ export default function Home() {
                   <p className="text-muted-foreground text-center py-8">この日にはTodoがありません</p>
                 ) : (
                   selectedDateTodos.map((todo) => (
-                    <div key={todo.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                    <div
+                      key={todo.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4 ${
+                        todo.createdByRole === "me"
+                          ? "border-l-red-500"
+                          : todo.createdByRole === "sibling"
+                            ? "border-l-blue-500"
+                            : "border-l-muted"
+                      }`}
+                    >
                       <Checkbox checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
                       <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteTodo(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
