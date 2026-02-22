@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "カレンダーTodoリスト",
-  description: "弟と共有できるカレンダー形式のTodoリスト",
+  description: "ユーザー名で共有できるカレンダー形式のTodoリスト",
 };
 
 export default function RootLayout({

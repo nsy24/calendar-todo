@@ -115,7 +115,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </button>
       </div>
       <p className="text-xs text-muted-foreground mt-4">
-        新規登録後、profiles テーブルで「私」か「弟」を設定するとカレンダーで色分けされます。
+        アカウント作成後、あなた専用のユーザー名を設定してカレンダーを始めましょう。
       </p>
     </div>
   );

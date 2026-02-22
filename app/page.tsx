@@ -10,19 +10,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Plus, LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
-
-type OwnerRole = "me" | "sibling";
+import { cn } from "@/lib/utils";
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   date: Date;
-  createdByRole?: OwnerRole | null;
+  createdByUsername?: string | null;
 }
 
 interface Profile {
-  role: OwnerRole | null;
   username: string | null;
 }
 
@@ -58,17 +56,14 @@ export default function Home() {
     setProfileLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("role,username")
+      .select("username")
       .eq("id", session.user.id)
       .maybeSingle();
     if (error) {
       console.error("Failed to fetch profile", error);
       setProfile(null);
     } else {
-      setProfile({
-        role: (data?.role as OwnerRole) ?? null,
-        username: data?.username ?? null,
-      });
+      setProfile({ username: data?.username ?? null });
     }
     setProfileLoading(false);
   }, [session?.user?.id]);
@@ -96,7 +91,7 @@ export default function Home() {
   async function fetchTodos() {
     const { data, error } = await supabase
       .from("todos")
-      .select("id,title,completed,date,created_by_role")
+      .select("id,title,completed,date,created_by_username")
       .order("date", { ascending: true });
     if (error) {
       console.error("Failed to fetch todos", error);
@@ -108,7 +103,7 @@ export default function Home() {
       text: r.title,
       completed: r.completed,
       date: new Date(r.date),
-      createdByRole: r.created_by_role ?? null,
+      createdByUsername: r.created_by_username ?? null,
     }));
     setTodos(mapped);
   }
@@ -137,15 +132,24 @@ export default function Home() {
     return map;
   }, [todos]);
 
-  // 予定に2人以上の role が含まれるときだけ色分けする
-  const useRoleColors = useMemo(() => {
-    const roles = new Set(todos.map((t) => t.createdByRole).filter(Boolean));
-    return roles.size >= 2;
+  // 予定に2人以上のユーザーが含まれるときだけ色分けする
+  const usernameColorMap = useMemo(() => {
+    const names = [...new Set(todos.map((t) => t.createdByUsername).filter(Boolean))] as string[];
+    names.sort();
+    if (names.length < 2) return null;
+    const colors = ["border-l-red-500", "border-l-blue-500", "border-l-green-500", "border-l-amber-500", "border-l-purple-500"];
+    const map: Record<string, string> = {};
+    names.forEach((name, i) => {
+      map[name] = colors[i % colors.length];
+    });
+    return map;
   }, [todos]);
 
+  const useUsernameColors = usernameColorMap !== null;
+
   const handleSubmit = async () => {
-    if (!session?.user?.id || !profile?.role) {
-      console.error("handleSubmit: not logged in or profile role missing");
+    if (!session?.user?.id || !profile?.username?.trim()) {
+      console.error("handleSubmit: not logged in or username missing");
       return;
     }
     if (newTodoText.trim() === "") {
@@ -157,7 +161,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("todos")
-        .insert([{ title, date, user_id: session.user.id, created_by_role: profile.role }])
+        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim() }])
         .select();
       if (error) {
         console.error("supabase insert error", error);
@@ -250,7 +254,7 @@ export default function Home() {
     );
   }
 
-  const displayName = profile?.username?.trim() || (profile?.role === "me" ? "私" : profile?.role === "sibling" ? "弟" : "?");
+  const displayName = profile?.username?.trim() ?? "";
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -278,10 +282,23 @@ export default function Home() {
               <CardTitle>{format(selectedDate, "yyyy年M月d日")} のTodo</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {useRoleColors && (
+              {useUsernameColors && usernameColorMap && (
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-red-500" /> 私</span>
-                  <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-500" /> 弟</span>
+                  {Object.entries(usernameColorMap).map(([name, borderClass]) => (
+                    <span key={name} className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "inline-block w-3 h-3 rounded-sm",
+                          borderClass === "border-l-red-500" && "bg-red-500",
+                          borderClass === "border-l-blue-500" && "bg-blue-500",
+                          borderClass === "border-l-green-500" && "bg-green-500",
+                          borderClass === "border-l-amber-500" && "bg-amber-500",
+                          borderClass === "border-l-purple-500" && "bg-purple-500"
+                        )}
+                      />
+                      {name}
+                    </span>
+                  ))}
                 </div>
               )}
               <div className="flex gap-2">
@@ -297,15 +314,12 @@ export default function Home() {
                   selectedDateTodos.map((todo) => (
                     <div
                       key={todo.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4 ${
-                        useRoleColors
-                          ? todo.createdByRole === "me"
-                            ? "border-l-red-500"
-                            : todo.createdByRole === "sibling"
-                              ? "border-l-blue-500"
-                              : "border-l-muted"
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4",
+                        useUsernameColors && todo.createdByUsername && usernameColorMap?.[todo.createdByUsername]
+                          ? usernameColorMap[todo.createdByUsername]
                           : "border-l-muted"
-                      }`}
+                      )}
                     >
                       <Checkbox checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
                       <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
@@ -355,7 +369,7 @@ function SetUsernameScreen({
           return;
         }
       } else {
-        const { error: err } = await supabase.from("profiles").insert({ id: session.user.id, username: value, role: "me" }).select();
+        const { error: err } = await supabase.from("profiles").insert({ id: session.user.id, username: value }).select();
         if (err) {
           if (err.code === "23505") setError("このユーザー名は既に使われています");
           else setError(err.message);
