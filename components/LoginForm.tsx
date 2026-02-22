@@ -118,5 +118,5 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         アカウント作成後、あなた専用のユーザー名を設定してカレンダーを始めましょう。
       </p>
     </div>
-  );。
+  );
 }
