@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,26 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
+  const [partnerUsernames, setPartnerUsernames] = useState<string[]>([]);
+  const [newPartnerInput, setNewPartnerInput] = useState("");
+  const [addPartnerLoading, setAddPartnerLoading] = useState(false);
+  const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const notifiedRef = useRef<Set<string>>(new Set());
+  const profileRef = useRef(profile);
+  const partnerUsernamesRef = useRef(partnerUsernames);
+  const sessionRef = useRef(session);
+  profileRef.current = profile;
+  partnerUsernamesRef.current = partnerUsernames;
+  sessionRef.current = session;
+
+  const addToast = React.useCallback((message: string) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((prev) => [...prev, { id, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -72,6 +91,24 @@ export default function Home() {
     fetchProfile();
   }, [fetchProfile]);
 
+  const fetchShares = React.useCallback(async () => {
+    if (!session?.user?.id) return;
+    const { data, error } = await supabase
+      .from("shares")
+      .select("partner_username")
+      .eq("owner_id", session.user.id);
+    if (error) {
+      console.error("Failed to fetch shares", error);
+      return;
+    }
+    setPartnerUsernames((data || []).map((r: { partner_username: string }) => r.partner_username));
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchShares();
+  }, [session, fetchShares]);
+
   useEffect(() => {
     if (!session) return;
     fetchTodos();
@@ -86,19 +123,75 @@ export default function Home() {
   useEffect(() => {
     if (!session) return;
     fetchTodos();
-  }, [session, selectedDate]);
+  }, [session, partnerUsernames]);
+
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("todos-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "todos" },
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          const myUsername = profileRef.current?.username?.trim();
+          const partners = partnerUsernamesRef.current;
+          const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string } | null;
+          const oldRow = payload.old as { title?: string; completed?: boolean; created_by_username?: string | null } | null;
+          const who = (newRow?.created_by_username || oldRow?.created_by_username || "").trim() || "誰か";
+          const isFromMe = who === myUsername;
+          const isFromPartner = who && who !== myUsername && partners.includes(who);
+          if (isFromMe) {
+            fetchTodos();
+            return;
+          }
+          if (payload.eventType === "INSERT" && newRow?.title && isFromPartner) {
+            addToast(`${who}さんがタスク「${newRow.title}」を追加しました`);
+          } else if (payload.eventType === "UPDATE" && newRow && oldRow) {
+            const becameCompleted = newRow.completed === true && oldRow.completed !== true;
+            const uncompleted = newRow.completed === false && oldRow.completed === true;
+            if (newRow.title && isFromPartner) {
+              if (becameCompleted) addToast(`${who}さんがタスク「${newRow.title}」を完了しました`);
+              else if (uncompleted) addToast(`${who}さんがタスク「${newRow.title}」の完了を解除しました`);
+            }
+          }
+          fetchTodos();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, addToast]);
 
   async function fetchTodos() {
-    const { data, error } = await supabase
+    if (!session?.user?.id) return;
+    const myRes = await supabase
       .from("todos")
       .select("id,title,completed,date,created_by_username")
+      .eq("user_id", session.user.id)
       .order("date", { ascending: true });
-    if (error) {
-      console.error("Failed to fetch todos", error);
-      alert("予定の取得に失敗しました: " + (error.message || JSON.stringify(error)));
+    if (myRes.error) {
+      console.error("Failed to fetch todos", myRes.error);
+      alert("予定の取得に失敗しました: " + (myRes.error.message || JSON.stringify(myRes.error)));
       return;
     }
-    const mapped: Todo[] = (data || []).map((r: any) => ({
+    let allRows: any[] = [...(myRes.data || [])];
+    if (partnerUsernames.length > 0) {
+      const partnerRes = await supabase
+        .from("todos")
+        .select("id,title,completed,date,created_by_username")
+        .in("created_by_username", partnerUsernames)
+        .order("date", { ascending: true });
+      if (!partnerRes.error && partnerRes.data?.length) {
+        const myIds = new Set((myRes.data || []).map((r: any) => r.id));
+        partnerRes.data.forEach((r: any) => {
+          if (!myIds.has(r.id)) allRows.push(r);
+        });
+      }
+    }
+    allRows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const mapped: Todo[] = allRows.map((r: any) => ({
       id: String(r.id),
       text: r.title,
       completed: r.completed,
@@ -107,6 +200,27 @@ export default function Home() {
     }));
     setTodos(mapped);
   }
+
+  const handleAddPartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = newPartnerInput.trim().toLowerCase();
+    if (!username) return;
+    if (username === profile?.username?.trim().toLowerCase()) {
+      setAddPartnerError("自分は追加できません");
+      return;
+    }
+    setAddPartnerError(null);
+    setAddPartnerLoading(true);
+    const { error } = await supabase.from("shares").insert({ owner_id: session!.user.id, partner_username: username });
+    setAddPartnerLoading(false);
+    if (error) {
+      if (error.code === "23505") setAddPartnerError("この仲間は既に追加済みです");
+      else setAddPartnerError(error.message);
+      return;
+    }
+    setNewPartnerInput("");
+    fetchShares().then(() => fetchTodos());
+  };
 
   function checkAndNotifyOverdue() {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
@@ -257,9 +371,9 @@ export default function Home() {
   const displayName = profile?.username?.trim() ?? "";
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{displayName}</span>
@@ -268,6 +382,36 @@ export default function Home() {
             </Button>
           </div>
         </div>
+        <Card className="mb-6">
+          <CardHeader className="py-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              仕事仲間を追加
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-2">
+            <form onSubmit={handleAddPartner} className="flex gap-2 flex-wrap items-center">
+              <Input
+                placeholder="仲間のユーザー名を入力"
+                value={newPartnerInput}
+                onChange={(e) => {
+                  setNewPartnerInput(e.target.value);
+                  setAddPartnerError(null);
+                }}
+                className="max-w-xs"
+              />
+              <Button type="submit" disabled={addPartnerLoading}>
+                {addPartnerLoading ? "追加中..." : "追加"}
+              </Button>
+            </form>
+            {addPartnerError && <p className="text-sm text-destructive">{addPartnerError}</p>}
+            {partnerUsernames.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                共有中: {partnerUsernames.join("、")}（仲間の予定がカレンダーに表示されます）
+              </p>
+            )}
+          </CardContent>
+        </Card>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -333,6 +477,19 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
+      </div>
+      <div
+        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+        aria-live="polite"
+      >
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className="pointer-events-auto rounded-lg border bg-card px-4 py-3 text-sm shadow-lg animate-in slide-in-from-right-5 duration-300"
+          >
+            {t.message}
+          </div>
+        ))}
       </div>
     </div>
   );
