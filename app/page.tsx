@@ -11,6 +11,7 @@ import { Trash2, Plus, LogOut, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
+import { validateUsername } from "@/lib/validation";
 
 interface Todo {
   id: string;
@@ -24,6 +25,17 @@ interface Profile {
   username: string | null;
 }
 
+interface PendingRequest {
+  id: string;
+  applicant_username: string;
+}
+
+interface ActiveShare {
+  id: string;
+  partner_user_id: string;
+  partner_username: string;
+}
+
 export default function Home() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -32,17 +44,18 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
-  const [partnerUsernames, setPartnerUsernames] = useState<string[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [activePartners, setActivePartners] = useState<ActiveShare[]>([]);
   const [newPartnerInput, setNewPartnerInput] = useState("");
   const [addPartnerLoading, setAddPartnerLoading] = useState(false);
   const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const notifiedRef = useRef<Set<string>>(new Set());
   const profileRef = useRef(profile);
-  const partnerUsernamesRef = useRef(partnerUsernames);
+  const activePartnerUsernamesRef = useRef<string[]>([]);
   const sessionRef = useRef(session);
   profileRef.current = profile;
-  partnerUsernamesRef.current = partnerUsernames;
+  activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
   sessionRef.current = session;
 
   const addToast = React.useCallback((message: string) => {
@@ -93,15 +106,47 @@ export default function Home() {
 
   const fetchShares = React.useCallback(async () => {
     if (!session?.user?.id) return;
-    const { data, error } = await supabase
+    const myId = session.user.id;
+    const { data: pendingRows, error: pendingErr } = await supabase
       .from("shares")
-      .select("partner_username")
-      .eq("owner_id", session.user.id);
-    if (error) {
-      console.error("Failed to fetch shares", error);
+      .select("id,owner_id")
+      .eq("receiver_id", myId)
+      .eq("status", "pending");
+    if (pendingErr) {
+      console.error("Failed to fetch pending shares", pendingErr);
+    }
+    const applicantIds = (pendingRows || []).map((r: { owner_id: string }) => r.owner_id);
+    const pendingWithNames: PendingRequest[] = [];
+    if (applicantIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("id,username").in("id", applicantIds);
+      const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+      pendingRows?.forEach((r: { id: string; owner_id: string }) => {
+        pendingWithNames.push({ id: r.id, applicant_username: nameById.get(r.owner_id) ?? "?" });
+      });
+    }
+    setPendingRequests(pendingWithNames);
+
+    const { data: activeRows, error: activeErr } = await supabase
+      .from("shares")
+      .select("id,owner_id,receiver_id")
+      .or(`owner_id.eq.${myId},receiver_id.eq.${myId}`)
+      .eq("status", "active");
+    if (activeErr) {
+      console.error("Failed to fetch active shares", activeErr);
+      setActivePartners([]);
       return;
     }
-    setPartnerUsernames((data || []).map((r: { partner_username: string }) => r.partner_username));
+    const partnerIds = (activeRows || []).map((r: { owner_id: string; receiver_id: string }) => (r.owner_id === myId ? r.receiver_id : r.owner_id));
+    const activeWithNames: ActiveShare[] = [];
+    if (partnerIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("id,username").in("id", partnerIds);
+      const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+      activeRows?.forEach((r: { id: string; owner_id: string; receiver_id: string }) => {
+        const partnerId = r.owner_id === myId ? r.receiver_id : r.owner_id;
+        activeWithNames.push({ id: r.id, partner_user_id: partnerId, partner_username: nameById.get(partnerId) ?? "?" });
+      });
+    }
+    setActivePartners(activeWithNames);
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -123,7 +168,7 @@ export default function Home() {
   useEffect(() => {
     if (!session) return;
     fetchTodos();
-  }, [session, partnerUsernames]);
+  }, [session, activePartners]);
 
   useEffect(() => {
     if (!session) return;
@@ -134,11 +179,11 @@ export default function Home() {
         { event: "*", schema: "public", table: "todos" },
         (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           const myUsername = profileRef.current?.username?.trim();
-          const partners = partnerUsernamesRef.current;
           const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string } | null;
           const oldRow = payload.old as { title?: string; completed?: boolean; created_by_username?: string | null } | null;
           const who = (newRow?.created_by_username || oldRow?.created_by_username || "").trim() || "誰か";
           const isFromMe = who === myUsername;
+          const partners = activePartnerUsernamesRef.current;
           const isFromPartner = who && who !== myUsername && partners.includes(who);
           if (isFromMe) {
             fetchTodos();
@@ -166,6 +211,7 @@ export default function Home() {
 
   async function fetchTodos() {
     if (!session?.user?.id) return;
+    const partnerUserIds = activePartners.map((p) => p.partner_user_id);
     const myRes = await supabase
       .from("todos")
       .select("id,title,completed,date,created_by_username")
@@ -177,11 +223,11 @@ export default function Home() {
       return;
     }
     let allRows: any[] = [...(myRes.data || [])];
-    if (partnerUsernames.length > 0) {
+    if (partnerUserIds.length > 0) {
       const partnerRes = await supabase
         .from("todos")
         .select("id,title,completed,date,created_by_username")
-        .in("created_by_username", partnerUsernames)
+        .in("user_id", partnerUserIds)
         .order("date", { ascending: true });
       if (!partnerRes.error && partnerRes.data?.length) {
         const myIds = new Set((myRes.data || []).map((r: any) => r.id));
@@ -201,24 +247,68 @@ export default function Home() {
     setTodos(mapped);
   }
 
-  const handleAddPartner = async (e: React.FormEvent) => {
+  const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    const username = newPartnerInput.trim().toLowerCase();
-    if (!username) return;
-    if (username === profile?.username?.trim().toLowerCase()) {
-      setAddPartnerError("自分は追加できません");
+    const errMsg = validateUsername(newPartnerInput);
+    if (errMsg) {
+      setAddPartnerError(errMsg);
+      return;
+    }
+    const username = newPartnerInput.trim();
+    if (username.toLowerCase() === profile?.username?.trim().toLowerCase()) {
+      setAddPartnerError("自分には申請できません");
       return;
     }
     setAddPartnerError(null);
     setAddPartnerLoading(true);
-    const { error } = await supabase.from("shares").insert({ owner_id: session!.user.id, partner_username: username });
+    const { data: profileRow, error: lookupErr } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", username)
+      .maybeSingle();
+    setAddPartnerLoading(false);
+    if (lookupErr || !profileRow?.id) {
+      setAddPartnerError("そのユーザー名のユーザーが見つかりません");
+      return;
+    }
+    if (profileRow.id === session!.user.id) {
+      setAddPartnerError("自分には申請できません");
+      return;
+    }
+    setAddPartnerLoading(true);
+    const { error } = await supabase
+      .from("shares")
+      .insert({ owner_id: session!.user.id, receiver_id: profileRow.id, status: "pending" });
     setAddPartnerLoading(false);
     if (error) {
-      if (error.code === "23505") setAddPartnerError("この仲間は既に追加済みです");
+      if (error.code === "23505") setAddPartnerError("既に申請済みか、共有済みです");
       else setAddPartnerError(error.message);
       return;
     }
     setNewPartnerInput("");
+    addToast("共有申請を送りました");
+    fetchShares();
+  };
+
+  const handleApprove = async (shareId: string) => {
+    const { error } = await supabase.from("shares").update({ status: "active" }).eq("id", shareId).eq("receiver_id", session!.user.id);
+    if (error) {
+      console.error("Approve error", error);
+      addToast("承認に失敗しました");
+      return;
+    }
+    addToast("共有を承認しました");
+    fetchShares().then(() => fetchTodos());
+  };
+
+  const handleUnshare = async (shareId: string) => {
+    const { error } = await supabase.from("shares").delete().eq("id", shareId);
+    if (error) {
+      console.error("Unshare error", error);
+      addToast("解除に失敗しました");
+      return;
+    }
+    addToast("共有を解除しました");
     fetchShares().then(() => fetchTodos());
   };
 
@@ -386,13 +476,13 @@ export default function Home() {
           <CardHeader className="py-4">
             <CardTitle className="text-base flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              仕事仲間を追加
+              共有申請・仲間
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 space-y-2">
-            <form onSubmit={handleAddPartner} className="flex gap-2 flex-wrap items-center">
+          <CardContent className="pt-0 space-y-4">
+            <form onSubmit={handleApply} className="flex gap-2 flex-wrap items-center">
               <Input
-                placeholder="仲間のユーザー名を入力"
+                placeholder="仲間のユーザー名を入力（半角英数字・. _ -）"
                 value={newPartnerInput}
                 onChange={(e) => {
                   setNewPartnerInput(e.target.value);
@@ -401,14 +491,39 @@ export default function Home() {
                 className="max-w-xs"
               />
               <Button type="submit" disabled={addPartnerLoading}>
-                {addPartnerLoading ? "追加中..." : "追加"}
+                {addPartnerLoading ? "送信中..." : "申請を送る"}
               </Button>
             </form>
             {addPartnerError && <p className="text-sm text-destructive">{addPartnerError}</p>}
-            {partnerUsernames.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                共有中: {partnerUsernames.join("、")}（仲間の予定がカレンダーに表示されます）
-              </p>
+            {pendingRequests.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">申請が届いています</p>
+                <ul className="space-y-1">
+                  {pendingRequests.map((req) => (
+                    <li key={req.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
+                      <span className="text-sm">{req.applicant_username}さんから共有申請</span>
+                      <Button size="sm" onClick={() => handleApprove(req.id)}>
+                        承認する
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {activePartners.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">共有中（仲間の予定がカレンダーに表示されます）</p>
+                <ul className="space-y-1">
+                  {activePartners.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
+                      <span className="text-sm">{p.partner_username}</span>
+                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleUnshare(p.id)}>
+                        解除
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -510,11 +625,12 @@ function SetUsernameScreen({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const value = username.trim();
-    if (!value) {
-      setError("ユーザー名を入力してください");
+    const errMsg = validateUsername(username);
+    if (errMsg) {
+      setError(errMsg);
       return;
     }
+    const value = username.trim();
     setError(null);
     setLoading(true);
     try {
@@ -548,12 +664,13 @@ function SetUsernameScreen({
         <p className="text-sm text-muted-foreground mb-4">他の人と共有するときに表示されます。一度設定すると変更できます。</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            placeholder="ユーザー名（例: たろう）"
+            placeholder="半角英数字・記号（. _ -）2〜50文字"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            minLength={1}
+            minLength={2}
             maxLength={50}
           />
+        <p className="text-xs text-muted-foreground">半角英数字と記号（. _ -）のみ使用できます</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "設定中..." : "設定する"}
