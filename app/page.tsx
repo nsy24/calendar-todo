@@ -13,12 +13,23 @@ import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
 import { validateUsername } from "@/lib/validation";
 
+type Priority = "high" | "medium" | "low";
+
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+const PRIORITY_LABEL: Record<Priority, string> = { high: "高", medium: "中", low: "低" };
+const PRIORITY_DOT_CLASS: Record<Priority, string> = {
+  high: "bg-red-500",
+  medium: "bg-amber-500",
+  low: "bg-slate-400",
+};
+
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   date: Date;
   createdByUsername?: string | null;
+  priority: Priority;
 }
 
 interface Profile {
@@ -44,6 +55,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
+  const [newTodoPriority, setNewTodoPriority] = useState<Priority>("medium");
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [activePartners, setActivePartners] = useState<ActiveShare[]>([]);
   const [newPartnerInput, setNewPartnerInput] = useState("");
@@ -179,18 +191,19 @@ export default function Home() {
         { event: "*", schema: "public", table: "todos" },
         (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           const myUsername = profileRef.current?.username?.trim();
-          const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string } | null;
-          const oldRow = payload.old as { title?: string; completed?: boolean; created_by_username?: string | null } | null;
+          const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string; priority?: Priority } | null;
+          const oldRow = payload.old as { title?: string; completed?: boolean; created_by_username?: string | null; priority?: Priority } | null;
           const who = (newRow?.created_by_username || oldRow?.created_by_username || "").trim() || "誰か";
           const isFromMe = who === myUsername;
           const partners = activePartnerUsernamesRef.current;
           const isFromPartner = who && who !== myUsername && partners.includes(who);
+          const priorityLabel = (p: string | undefined) => (p === "high" || p === "medium" || p === "low" ? PRIORITY_LABEL[p] : "中");
           if (isFromMe) {
             fetchTodos();
             return;
           }
           if (payload.eventType === "INSERT" && newRow?.title && isFromPartner) {
-            addToast(`${who}さんがタスク「${newRow.title}」を追加しました`);
+            addToast(`${who}さんが『${priorityLabel(newRow.priority)}』優先度のタスク「${newRow.title}」を追加しました`);
           } else if (payload.eventType === "UPDATE" && newRow && oldRow) {
             const becameCompleted = newRow.completed === true && oldRow.completed !== true;
             const uncompleted = newRow.completed === false && oldRow.completed === true;
@@ -214,7 +227,7 @@ export default function Home() {
     const partnerUserIds = activePartners.map((p) => p.partner_user_id);
     const myRes = await supabase
       .from("todos")
-      .select("id,title,completed,date,created_by_username")
+      .select("id,title,completed,date,created_by_username,priority")
       .eq("user_id", session.user.id)
       .order("date", { ascending: true });
     if (myRes.error) {
@@ -226,7 +239,7 @@ export default function Home() {
     if (partnerUserIds.length > 0) {
       const partnerRes = await supabase
         .from("todos")
-        .select("id,title,completed,date,created_by_username")
+        .select("id,title,completed,date,created_by_username,priority")
         .in("user_id", partnerUserIds)
         .order("date", { ascending: true });
       if (!partnerRes.error && partnerRes.data?.length) {
@@ -243,6 +256,7 @@ export default function Home() {
       completed: r.completed,
       date: new Date(r.date),
       createdByUsername: r.created_by_username ?? null,
+      priority: (r.priority === "high" || r.priority === "medium" || r.priority === "low" ? r.priority : "medium") as Priority,
     }));
     setTodos(mapped);
   }
@@ -336,7 +350,10 @@ export default function Home() {
     });
   }
 
-  const selectedDateTodos = useMemo(() => todos.filter((t) => isSameDay(t.date, selectedDate)), [todos, selectedDate]);
+  const selectedDateTodos = useMemo(() => {
+    const list = todos.filter((t) => isSameDay(t.date, selectedDate));
+    return [...list].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+  }, [todos, selectedDate]);
 
   const todosByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -376,7 +393,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("todos")
-        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim() }])
+        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim(), priority: newTodoPriority }])
         .select();
       if (error) {
         console.error("supabase insert error", error);
@@ -400,7 +417,17 @@ export default function Home() {
       alert("予定の追加に失敗しました");
     } finally {
       setNewTodoText("");
+      setNewTodoPriority("medium");
     }
+  };
+
+  const handleChangePriority = async (id: string, priority: Priority) => {
+    const { error } = await supabase.from("todos").update({ priority }).eq("id", id);
+    if (error) {
+      console.error("update priority error", error);
+      return;
+    }
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, priority } : t)));
   };
 
   const handleToggleTodo = async (id: string) => {
@@ -576,8 +603,29 @@ export default function Home() {
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
-                <Input placeholder="新しいTodoを追加..." value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Input placeholder="新しいTodoを追加..." value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1 min-w-[200px]" />
+                <div className="flex items-center gap-1" role="group" aria-label="優先度">
+                  {(["high", "medium", "low"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setNewTodoPriority(p)}
+                      className={cn(
+                        "rounded px-2 py-1 text-xs font-medium transition-colors",
+                        newTodoPriority === p
+                          ? p === "high"
+                            ? "bg-red-500 text-white"
+                            : p === "medium"
+                              ? "bg-amber-500 text-white"
+                              : "bg-slate-500 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      {PRIORITY_LABEL[p]}
+                    </button>
+                  ))}
+                </div>
                 <Button onClick={handleSubmit} size="icon">
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -596,8 +644,19 @@ export default function Home() {
                           : "border-l-muted"
                       )}
                     >
+                      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`優先度: ${PRIORITY_LABEL[todo.priority]}`} />
                       <Checkbox checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
                       <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
+                      <select
+                        value={todo.priority}
+                        onChange={(e) => handleChangePriority(todo.id, e.target.value as Priority)}
+                        className="rounded border bg-background px-2 py-1 text-xs"
+                        title="優先度を変更"
+                      >
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                      </select>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteTodo(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
                         <Trash2 className="h-4 w-4" />
                       </Button>
