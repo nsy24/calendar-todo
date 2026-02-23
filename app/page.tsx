@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,13 @@ interface ActiveShare {
   partner_username: string;
 }
 
+interface NotificationRow {
+  id: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+}
+
 export default function Home() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -63,6 +70,8 @@ export default function Home() {
   const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const notifiedRef = useRef<Set<string>>(new Set());
   const profileRef = useRef(profile);
   const activePartnerUsernamesRef = useRef<string[]>([]);
@@ -182,6 +191,50 @@ export default function Home() {
     if (!session) return;
     fetchTodos();
   }, [session, activePartners]);
+
+  const fetchNotifications = React.useCallback(async () => {
+    if (!session?.user?.id) return;
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id,message,created_at,is_read")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Failed to fetch notifications", error);
+      return;
+    }
+    setNotifications(
+      (data || []).map((r: { id: string; message: string; created_at: string; is_read: boolean }) => ({
+        id: r.id,
+        message: r.message,
+        created_at: r.created_at,
+        is_read: r.is_read,
+      }))
+    );
+  }, [session?.user?.id]);
+
+  const markNotificationsRead = React.useCallback(async () => {
+    if (!session?.user?.id) return;
+    await supabase.from("notifications").update({ is_read: true }).eq("user_id", session.user.id).eq("is_read", false);
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  }, [session?.user?.id]);
+
+  const insertNotificationLog = React.useCallback(
+    async (message: string) => {
+      if (!session?.user?.id) return;
+      const userIds = [session.user.id, ...activePartners.map((p) => p.partner_user_id)];
+      const rows = userIds.map((user_id) => ({ user_id, message }));
+      const { error } = await supabase.from("notifications").insert(rows);
+      if (error) console.error("Failed to insert notifications", error);
+    },
+    [session?.user?.id, activePartners]
+  );
+
+  useEffect(() => {
+    if (showNotifications && session?.user?.id) {
+      fetchNotifications().then(() => markNotificationsRead());
+    }
+  }, [showNotifications, session?.user?.id, fetchNotifications, markNotificationsRead]);
 
   useEffect(() => {
     if (!session) return;
@@ -452,6 +505,8 @@ export default function Home() {
         } catch (e) {
           console.error("fetchTodos after insert error", e);
         }
+        const actor = profile?.username?.trim() || "自分";
+        await insertNotificationLog(`${actor}がタスク「${title}」を追加しました`);
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("Todoを追加しました", { body: title });
         }
@@ -468,12 +523,16 @@ export default function Home() {
   };
 
   const handleChangePriority = async (id: string, priority: Priority) => {
+    const target = todos.find((t) => t.id === id);
+    if (!target) return;
     const { error } = await supabase.from("todos").update({ priority }).eq("id", id);
     if (error) {
       console.error("update priority error", error);
       return;
     }
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, priority } : t)));
+    const actor = profile?.username?.trim() || "自分";
+    await insertNotificationLog(`${actor}がタスク「${target.text}」の優先度を${PRIORITY_LABEL[priority]}に変更しました`);
   };
 
   const handleToggleTodo = async (id: string) => {
@@ -486,15 +545,24 @@ export default function Home() {
       return;
     }
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: newCompleted } : t)));
+    const actor = profile?.username?.trim() || "自分";
+    const msg = newCompleted
+      ? `${actor}がタスク「${target.text}」を完了しました`
+      : `${actor}がタスク「${target.text}」の完了を解除しました`;
+    await insertNotificationLog(msg);
   };
 
   const handleDeleteTodo = async (id: string) => {
+    const target = todos.find((t) => t.id === id);
+    if (!target) return;
     const { error } = await supabase.from("todos").delete().eq("id", id);
     if (error) {
       console.error("delete error", error);
       return;
     }
     setTodos((prev) => prev.filter((t) => t.id !== id));
+    const actor = profile?.username?.trim() || "自分";
+    await insertNotificationLog(`${actor}がタスク「${target.text}」を削除しました`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -620,10 +688,15 @@ export default function Home() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>カレンダー</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
-                <FileText className="h-4 w-4 mr-1" />
-                週の振り返り
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={() => setShowNotifications(true)} title="お知らせ">
+                  <Bell className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
+                  <FileText className="h-4 w-4 mr-1" />
+                  週の振り返り
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <Calendar selectedDate={selectedDate} onDateSelect={setSelectedDate} />
@@ -718,6 +791,28 @@ export default function Home() {
           </Card>
         </div>
       </div>
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowNotifications(false)}>
+          <div className="bg-card border rounded-lg shadow-lg max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">お知らせ一覧</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowNotifications(false)} aria-label="閉じる">×</Button>
+            </div>
+            <ul className="p-4 overflow-y-auto space-y-2">
+              {notifications.length === 0 ? (
+                <li className="text-sm text-muted-foreground">お知らせはありません</li>
+              ) : (
+                notifications.map((n) => (
+                  <li key={n.id} className="text-sm py-1 border-b border-border/50 last:border-0">
+                    {format(new Date(n.created_at), "H時m分")}：{n.message}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {showWeeklyReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowWeeklyReport(false)}>
           <div className="bg-card border rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
