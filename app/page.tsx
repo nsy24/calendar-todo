@@ -7,7 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
@@ -30,6 +41,8 @@ interface Todo {
   date: Date;
   createdByUsername?: string | null;
   priority: Priority;
+  position: number;
+  userId?: string;
 }
 
 interface Profile {
@@ -53,6 +66,62 @@ function Avatar({ seed, size = 32, className }: { seed: string; size?: number; c
       height={size}
       className={cn("rounded-full shrink-0 bg-muted", className)}
     />
+  );
+}
+
+function SortableTodoRow({
+  todo,
+  useUsernameColors,
+  usernameColorMap,
+  getAvatarSeedForUsername,
+  onToggle,
+  onChangePriority,
+  onDelete,
+}: {
+  todo: Todo;
+  useUsernameColors: boolean;
+  usernameColorMap: Record<string, string> | null;
+  getAvatarSeedForUsername: (name: string) => string;
+  onToggle: (id: string) => void;
+  onChangePriority: (id: string, priority: Priority) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4",
+        useUsernameColors && todo.createdByUsername && usernameColorMap?.[todo.createdByUsername]
+          ? usernameColorMap[todo.createdByUsername]
+          : "border-l-muted",
+        isDragging && "opacity-95 shadow-xl scale-[1.02] z-50 ring-2 ring-primary/20"
+      )}
+    >
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1 rounded">
+        <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden />
+      </div>
+      <Avatar seed={todoUserSeed} size={32} />
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`優先度: ${PRIORITY_LABEL[todo.priority]}`} />
+      <Checkbox checked={todo.completed} onChange={() => onToggle(todo.id)} />
+      <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
+      <select
+        value={todo.priority}
+        onChange={(e) => onChangePriority(todo.id, e.target.value as Priority)}
+        className="rounded border bg-background px-2 py-1 text-xs"
+        title="優先度を変更"
+      >
+        <option value="high">高</option>
+        <option value="medium">中</option>
+        <option value="low">低</option>
+      </select>
+      <Button variant="ghost" size="icon" onClick={() => onDelete(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 
@@ -343,7 +412,7 @@ export default function Home() {
     const partnerUserIds = activePartners.map((p) => p.partner_user_id);
     const myRes = await supabase
       .from("todos")
-      .select("id,title,completed,date,created_by_username,priority")
+      .select("id,title,completed,date,created_by_username,priority,position,user_id")
       .eq("user_id", session.user.id)
       .order("date", { ascending: true });
     if (myRes.error) {
@@ -353,9 +422,9 @@ export default function Home() {
     }
     let allRows: any[] = [...(myRes.data || [])];
     if (partnerUserIds.length > 0) {
-      const partnerRes = await supabase
+        const partnerRes = await supabase
         .from("todos")
-        .select("id,title,completed,date,created_by_username,priority")
+        .select("id,title,completed,date,created_by_username,priority,position,user_id")
         .in("user_id", partnerUserIds)
         .order("date", { ascending: true });
       if (!partnerRes.error && partnerRes.data?.length) {
@@ -373,6 +442,8 @@ export default function Home() {
       date: new Date(r.date),
       createdByUsername: r.created_by_username ?? null,
       priority: (r.priority === "high" || r.priority === "medium" || r.priority === "low" ? r.priority : "medium") as Priority,
+      position: typeof r.position === "number" ? r.position : 0,
+      userId: r.user_id ?? undefined,
     }));
     setTodos(mapped);
   }
@@ -469,7 +540,9 @@ export default function Home() {
 
   const selectedDateTodos = useMemo(() => {
     const list = todos.filter((t) => isSameDay(t.date, selectedDate));
-    return [...list].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    return [...list].sort(
+      (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || a.position - b.position
+    );
   }, [todos, selectedDate]);
 
   const todosByDate = useMemo(() => {
@@ -555,7 +628,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from("todos")
-        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim(), priority: newTodoPriority }])
+        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim(), priority: newTodoPriority, position: 0 }])
         .select();
       if (error) {
         console.error("supabase insert error", error);
@@ -627,6 +700,27 @@ export default function Home() {
     const actor = profile?.username?.trim() || "自分";
     await insertNotificationLog(`${actor}がタスク「${target.text}」を削除しました`);
   };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = selectedDateTodos.findIndex((t) => t.id === active.id);
+    const newIndex = selectedDateTodos.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(selectedDateTodos, oldIndex, newIndex);
+    const reordered = newOrder.map((t, i) => ({ ...t, position: i }));
+    setTodos((prev) => {
+      const others = prev.filter((t) => !isSameDay(t.date, selectedDate));
+      return [...others, ...reordered].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    });
+    const myUpdates = reordered.filter((t) => t.userId === session?.user?.id);
+    await Promise.all(myUpdates.map((t) => supabase.from("todos").update({ position: t.position }).eq("id", t.id)));
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSubmit();
@@ -857,37 +951,22 @@ export default function Home() {
                 {selectedDateTodos.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">この日にはTodoがありません</p>
                 ) : (
-                  selectedDateTodos.map((todo) => {
-                    const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
-                    return (
-                    <div
-                      key={todo.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4",
-                        useUsernameColors && todo.createdByUsername && usernameColorMap?.[todo.createdByUsername]
-                          ? usernameColorMap[todo.createdByUsername]
-                          : "border-l-muted"
-                      )}
-                    >
-                      <Avatar seed={todoUserSeed} size={32} />
-                      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`優先度: ${PRIORITY_LABEL[todo.priority]}`} />
-                      <Checkbox checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
-                      <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
-                      <select
-                        value={todo.priority}
-                        onChange={(e) => handleChangePriority(todo.id, e.target.value as Priority)}
-                        className="rounded border bg-background px-2 py-1 text-xs"
-                        title="優先度を変更"
-                      >
-                        <option value="high">高</option>
-                        <option value="medium">中</option>
-                        <option value="low">低</option>
-                      </select>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteTodo(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ); })
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={selectedDateTodos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                      {selectedDateTodos.map((todo) => (
+                        <SortableTodoRow
+                          key={todo.id}
+                          todo={todo}
+                          useUsernameColors={useUsernameColors}
+                          usernameColorMap={usernameColorMap}
+                          getAvatarSeedForUsername={getAvatarSeedForUsername}
+                          onToggle={handleToggleTodo}
+                          onChangePriority={handleChangePriority}
+                          onDelete={handleDeleteTodo}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 )}
               </div>
             </CardContent>
