@@ -85,6 +85,7 @@ export default function Home() {
   const [newTodoPriority, setNewTodoPriority] = useState<Priority>("medium");
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [activePartners, setActivePartners] = useState<ActiveShare[]>([]);
+  const [partnerProfiles, setPartnerProfiles] = useState<Record<string, { username: string; avatar_seed: string | null }>>({});
   const [newPartnerInput, setNewPartnerInput] = useState("");
   const [addPartnerLoading, setAddPartnerLoading] = useState(false);
   const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
@@ -180,15 +181,20 @@ export default function Home() {
     }
     const partnerIds = (activeRows || []).map((r: { owner_id: string; receiver_id: string }) => (r.owner_id === myId ? r.receiver_id : r.owner_id));
     const activeWithNames: ActiveShare[] = [];
+    const nextPartnerProfiles: Record<string, { username: string; avatar_seed: string | null }> = {};
     if (partnerIds.length > 0) {
-      const { data: profiles } = await supabase.from("profiles").select("id,username").in("id", partnerIds);
+      const { data: profiles } = await supabase.from("profiles").select("id,username,avatar_seed").in("id", partnerIds);
       const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+      (profiles || []).forEach((p: { id: string; username: string | null; avatar_seed: string | null }) => {
+        nextPartnerProfiles[p.id] = { username: p.username ?? "", avatar_seed: p.avatar_seed ?? null };
+      });
       activeRows?.forEach((r: { id: string; owner_id: string; receiver_id: string }) => {
         const partnerId = r.owner_id === myId ? r.receiver_id : r.owner_id;
         activeWithNames.push({ id: r.id, partner_user_id: partnerId, partner_username: nameById.get(partnerId) ?? "?" });
       });
     }
     setActivePartners(activeWithNames);
+    setPartnerProfiles(nextPartnerProfiles);
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -295,6 +301,40 @@ export default function Home() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, addToast]);
+
+  const activePartnerIdsRef = useRef<Set<string>>(new Set());
+  activePartnerIdsRef.current = new Set(activePartners.map((p) => p.partner_user_id));
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel("profiles-changes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload: { new: { id: string; username?: string | null; avatar_seed?: string | null } }) => {
+          const id = payload.new?.id;
+          if (!id) return;
+          if (id === session.user.id) {
+            fetchProfile();
+            return;
+          }
+          if (activePartnerIdsRef.current.has(id)) {
+            setPartnerProfiles((prev) => ({
+              ...prev,
+              [id]: {
+                username: payload.new?.username ?? prev[id]?.username ?? "",
+                avatar_seed: payload.new?.avatar_seed ?? null,
+              },
+            }));
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id, fetchProfile]);
 
   async function fetchTodos() {
     if (!session?.user?.id) return;
@@ -633,6 +673,15 @@ export default function Home() {
   const displayName = profile?.username?.trim() ?? "";
   const avatarSeed = (profile?.avatar_seed?.trim() || profile?.username?.trim() || "default") as string;
 
+  function getAvatarSeedForUsername(username: string): string {
+    const name = username?.trim();
+    if (!name) return "自分";
+    if (name === displayName) return avatarSeed;
+    const partner = activePartners.find((p) => p.partner_username === name);
+    if (partner) return (partnerProfiles[partner.partner_user_id]?.avatar_seed ?? partner.partner_username).trim() || partner.partner_username;
+    return name;
+  }
+
   const handleRandomAvatar = async () => {
     if (!session?.user?.id) return;
     const seed = crypto.randomUUID();
@@ -643,6 +692,7 @@ export default function Home() {
       return;
     }
     await fetchProfile();
+    await fetchTodos();
     addToast("アバターを更新しました");
   };
 
@@ -717,7 +767,7 @@ export default function Home() {
                   {activePartners.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
                       <span className="flex items-center gap-2 text-sm">
-                        <Avatar seed={p.partner_username} size={32} />
+                        <Avatar seed={getAvatarSeedForUsername(p.partner_username)} size={32} />
                         {p.partner_username}
                       </span>
                       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleUnshare(p.id)}>
@@ -757,7 +807,7 @@ export default function Home() {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                   {Object.entries(usernameColorMap).map(([name, borderClass]) => (
                     <span key={name} className="flex items-center gap-1.5">
-                      <Avatar seed={name} size={32} />
+                      <Avatar seed={getAvatarSeedForUsername(name)} size={32} />
                       <span
                         className={cn(
                           "inline-block w-3 h-3 rounded-sm",
@@ -805,7 +855,7 @@ export default function Home() {
                   <p className="text-muted-foreground text-center py-8">この日にはTodoがありません</p>
                 ) : (
                   selectedDateTodos.map((todo) => {
-                    const todoUserSeed = (todo.createdByUsername?.trim() === displayName ? avatarSeed : (todo.createdByUsername?.trim() || "自分")) as string;
+                    const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
                     return (
                     <div
                       key={todo.id}
@@ -891,7 +941,7 @@ export default function Home() {
                         <h3 className="font-medium text-sm mb-2">■ {format(date, "M/d")}({weekDay})</h3>
                         <ul className="space-y-2 pl-4">
                           {Object.entries(byUser).map(([user, tasks]) => {
-                            const userSeed = (user === "自分" ? avatarSeed : user) as string;
+                            const userSeed = getAvatarSeedForUsername(user === "自分" ? displayName : user);
                             return (
                             <li key={user}>
                               <div className="flex items-center gap-2 mb-1">
