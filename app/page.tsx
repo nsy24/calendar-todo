@@ -279,7 +279,7 @@ export default function Home() {
           const isFromPartner = who && who !== myUsername && partners.includes(who);
           const priorityLabel = (p: string | undefined) => (p === "high" || p === "medium" || p === "low" ? PRIORITY_LABEL[p] : "中");
           if (isFromMe) {
-            fetchTodos();
+            fetchTodosRef.current();
             return;
           }
           if (payload.eventType === "INSERT" && newRow?.title && isFromPartner) {
@@ -292,7 +292,7 @@ export default function Home() {
               else if (uncompleted) addToast(`${who}さんがタスク「${newRow.title}」の完了を解除しました`);
             }
           }
-          fetchTodos();
+          fetchTodosRef.current();
         }
       )
       .subscribe();
@@ -336,6 +336,8 @@ export default function Home() {
     };
   }, [session?.user?.id, fetchProfile]);
 
+  const fetchTodosRef = useRef<() => Promise<void>>(async () => {});
+
   async function fetchTodos() {
     if (!session?.user?.id) return;
     const partnerUserIds = activePartners.map((p) => p.partner_user_id);
@@ -374,6 +376,7 @@ export default function Home() {
     }));
     setTodos(mapped);
   }
+  fetchTodosRef.current = fetchTodos;
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
