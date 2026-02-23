@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, startOfWeek, endOfWeek } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
 import { cn } from "@/lib/utils";
@@ -62,6 +62,7 @@ export default function Home() {
   const [addPartnerLoading, setAddPartnerLoading] = useState(false);
   const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const notifiedRef = useRef<Set<string>>(new Set());
   const profileRef = useRef(profile);
   const activePartnerUsernamesRef = useRef<string[]>([]);
@@ -364,6 +365,51 @@ export default function Home() {
     return map;
   }, [todos]);
 
+  const weeklyReport = useMemo(() => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const completed = todos.filter((t) => {
+      const d = new Date(t.date);
+      d.setHours(0, 0, 0, 0);
+      return t.completed && d >= weekStart && d <= weekEnd;
+    });
+    const total = completed.length;
+    const byPriority = { high: 0, medium: 0, low: 0 } as Record<Priority, number>;
+    completed.forEach((t) => {
+      byPriority[t.priority]++;
+    });
+    const byDate: Record<string, Record<string, Todo[]>> = {};
+    completed.forEach((t) => {
+      const key = format(t.date, "yyyy-MM-dd");
+      if (!byDate[key]) byDate[key] = {};
+      const user = t.createdByUsername?.trim() || "自分";
+      if (!byDate[key][user]) byDate[key][user] = [];
+      byDate[key][user].push(t);
+    });
+    const sortedDates = Object.keys(byDate).sort();
+    return { total, byPriority, byDate, sortedDates };
+  }, [todos]);
+
+  const copyReportText = React.useCallback(() => {
+    const lines: string[] = ["【今週の成果報告】", ""];
+    lines.push(`合計完了数: ${weeklyReport.total}件 (高: ${weeklyReport.byPriority.high} / 中: ${weeklyReport.byPriority.medium} / 低: ${weeklyReport.byPriority.low})`);
+    const weekDay = ["日", "月", "火", "水", "木", "金", "土"];
+    weeklyReport.sortedDates.forEach((dateKey) => {
+      const date = new Date(dateKey + "T12:00:00");
+      const dayLabel = weekDay[date.getDay()];
+      lines.push("", `■ ${format(date, "M/d")}(${dayLabel})`, "");
+      const byUser = weeklyReport.byDate[dateKey];
+      Object.entries(byUser).forEach(([user, tasks]) => {
+        if (user !== "自分") lines.push(`${user}さんの成果`);
+        tasks.forEach((t) => lines.push(t.text));
+        if (user !== "自分") lines.push("");
+      });
+    });
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text).then(() => addToast("報告用テキストをコピーしました"), () => addToast("コピーに失敗しました"));
+  }, [weeklyReport, addToast]);
+
   // 予定に2人以上のユーザーが含まれるときだけ色分けする
   const usernameColorMap = useMemo(() => {
     const names = [...new Set(todos.map((t) => t.createdByUsername).filter(Boolean))] as string[];
@@ -572,8 +618,12 @@ export default function Home() {
         </Card>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>カレンダー</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
+                <FileText className="h-4 w-4 mr-1" />
+                週の振り返り
+              </Button>
             </CardHeader>
             <CardContent>
               <Calendar selectedDate={selectedDate} onDateSelect={setSelectedDate} />
@@ -668,6 +718,56 @@ export default function Home() {
           </Card>
         </div>
       </div>
+      {showWeeklyReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowWeeklyReport(false)}>
+          <div className="bg-card border rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">今週のレポート</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowWeeklyReport(false)} aria-label="閉じる">×</Button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-4">
+              <p className="text-sm text-muted-foreground">
+                合計完了数: {weeklyReport.total}件（高: {weeklyReport.byPriority.high} / 中: {weeklyReport.byPriority.medium} / 低: {weeklyReport.byPriority.low}）
+              </p>
+              {weeklyReport.sortedDates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">今週は完了したタスクがありません</p>
+              ) : (
+                <div className="space-y-4">
+                  {weeklyReport.sortedDates.map((dateKey) => {
+                    const date = new Date(dateKey + "T12:00:00");
+                    const weekDay = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()];
+                    const byUser = weeklyReport.byDate[dateKey];
+                    return (
+                      <div key={dateKey}>
+                        <h3 className="font-medium text-sm mb-2">■ {format(date, "M/d")}({weekDay})</h3>
+                        <ul className="space-y-2 pl-4">
+                          {Object.entries(byUser).map(([user, tasks]) => (
+                            <li key={user}>
+                              {user !== "自分" && <p className="text-xs text-muted-foreground mb-1">{user}さんの成果</p>}
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {tasks.map((t) => (
+                                  <li key={t.id}>{t.text}</li>
+                                ))}
+                              </ul>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t">
+              <Button className="w-full" onClick={copyReportText}>
+                <Copy className="h-4 w-4 mr-2" />
+                報告用テキストをコピー
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"
         aria-live="polite"
