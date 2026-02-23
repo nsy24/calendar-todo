@@ -34,6 +34,26 @@ interface Todo {
 
 interface Profile {
   username: string | null;
+  avatar_seed: string | null;
+}
+
+const AVATAR_BASE = "https://api.dicebear.com/7.x/avataaars/svg";
+
+function getAvatarUrl(seed: string): string {
+  const s = (seed || "default").trim() || "default";
+  return `${AVATAR_BASE}?seed=${encodeURIComponent(s)}`;
+}
+
+function Avatar({ seed, size = 32, className }: { seed: string; size?: number; className?: string }) {
+  return (
+    <img
+      src={getAvatarUrl(seed)}
+      alt=""
+      width={size}
+      height={size}
+      className={cn("rounded-full shrink-0 bg-muted", className)}
+    />
+  );
 }
 
 interface PendingRequest {
@@ -110,14 +130,14 @@ export default function Home() {
     setProfileLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("username")
+      .select("username, avatar_seed")
       .eq("id", session.user.id)
       .maybeSingle();
     if (error) {
       console.error("Failed to fetch profile", error);
       setProfile(null);
     } else {
-      setProfile({ username: data?.username ?? null });
+      setProfile({ username: data?.username ?? null, avatar_seed: data?.avatar_seed ?? null });
     }
     setProfileLoading(false);
   }, [session?.user?.id]);
@@ -611,14 +631,34 @@ export default function Home() {
   }
 
   const displayName = profile?.username?.trim() ?? "";
+  const avatarSeed = (profile?.avatar_seed?.trim() || profile?.username?.trim() || "default") as string;
+
+  const handleRandomAvatar = async () => {
+    if (!session?.user?.id) return;
+    const seed = crypto.randomUUID();
+    const { error } = await supabase.from("profiles").update({ avatar_seed: seed }).eq("id", session.user.id);
+    if (error) {
+      console.error("Failed to update avatar_seed", error);
+      addToast("アバターの更新に失敗しました");
+      return;
+    }
+    await fetchProfile();
+    addToast("アバターを更新しました");
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{displayName}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Avatar seed={avatarSeed} size={32} />
+              <span className="text-sm text-muted-foreground">{displayName}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
+              アバターをランダム生成
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleLogout} title="ログアウト">
               <LogOut className="h-4 w-4" />
             </Button>
@@ -653,7 +693,10 @@ export default function Home() {
                 <ul className="space-y-1">
                   {pendingRequests.map((req) => (
                     <li key={req.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
-                      <span className="text-sm">{req.applicant_username}さんから共有申請</span>
+                      <span className="flex items-center gap-2 text-sm">
+                        <Avatar seed={req.applicant_username} size={32} />
+                        {req.applicant_username}さんから共有申請
+                      </span>
                       <div className="flex items-center gap-1">
                         <Button size="sm" onClick={() => handleApprove(req.id)}>
                           承認する
@@ -673,7 +716,10 @@ export default function Home() {
                 <ul className="space-y-1">
                   {activePartners.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
-                      <span className="text-sm">{p.partner_username}</span>
+                      <span className="flex items-center gap-2 text-sm">
+                        <Avatar seed={p.partner_username} size={32} />
+                        {p.partner_username}
+                      </span>
                       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleUnshare(p.id)}>
                         解除
                       </Button>
@@ -711,6 +757,7 @@ export default function Home() {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                   {Object.entries(usernameColorMap).map(([name, borderClass]) => (
                     <span key={name} className="flex items-center gap-1.5">
+                      <Avatar seed={name} size={32} />
                       <span
                         className={cn(
                           "inline-block w-3 h-3 rounded-sm",
@@ -757,7 +804,9 @@ export default function Home() {
                 {selectedDateTodos.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">この日にはTodoがありません</p>
                 ) : (
-                  selectedDateTodos.map((todo) => (
+                  selectedDateTodos.map((todo) => {
+                    const todoUserSeed = (todo.createdByUsername?.trim() === displayName ? avatarSeed : (todo.createdByUsername?.trim() || "自分")) as string;
+                    return (
                     <div
                       key={todo.id}
                       className={cn(
@@ -767,6 +816,7 @@ export default function Home() {
                           : "border-l-muted"
                       )}
                     >
+                      <Avatar seed={todoUserSeed} size={32} />
                       <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`優先度: ${PRIORITY_LABEL[todo.priority]}`} />
                       <Checkbox checked={todo.completed} onChange={() => handleToggleTodo(todo.id)} />
                       <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
@@ -784,7 +834,7 @@ export default function Home() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))
+                  ); })
                 )}
               </div>
             </CardContent>
@@ -795,7 +845,11 @@ export default function Home() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowNotifications(false)}>
           <div className="bg-card border rounded-lg shadow-lg max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">お知らせ一覧</h2>
+              <div className="flex items-center gap-2">
+                <Avatar seed={avatarSeed} size={32} />
+                <h2 className="text-lg font-semibold">お知らせ一覧</h2>
+                <span className="text-sm text-muted-foreground">{displayName}</span>
+              </div>
               <Button variant="ghost" size="icon" onClick={() => setShowNotifications(false)} aria-label="閉じる">×</Button>
             </div>
             <ul className="p-4 overflow-y-auto space-y-2">
@@ -836,16 +890,22 @@ export default function Home() {
                       <div key={dateKey}>
                         <h3 className="font-medium text-sm mb-2">■ {format(date, "M/d")}({weekDay})</h3>
                         <ul className="space-y-2 pl-4">
-                          {Object.entries(byUser).map(([user, tasks]) => (
+                          {Object.entries(byUser).map(([user, tasks]) => {
+                            const userSeed = (user === "自分" ? avatarSeed : user) as string;
+                            return (
                             <li key={user}>
-                              {user !== "自分" && <p className="text-xs text-muted-foreground mb-1">{user}さんの成果</p>}
+                              <div className="flex items-center gap-2 mb-1">
+                                <Avatar seed={userSeed} size={32} />
+                                {user !== "自分" && <p className="text-xs text-muted-foreground">{user}さんの成果</p>}
+                                {user === "自分" && <p className="text-xs text-muted-foreground">自分</p>}
+                              </div>
                               <ul className="list-disc list-inside space-y-0.5">
                                 {tasks.map((t) => (
                                   <li key={t.id}>{t.text}</li>
                                 ))}
                               </ul>
                             </li>
-                          ))}
+                          ); })}
                         </ul>
                       </div>
                     );
