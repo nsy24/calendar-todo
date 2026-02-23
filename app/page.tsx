@@ -301,6 +301,17 @@ export default function Home() {
     fetchShares().then(() => fetchTodos());
   };
 
+  const handleReject = async (shareId: string) => {
+    const { error } = await supabase.from("shares").delete().eq("id", shareId);
+    if (error) {
+      console.error("Reject error", error);
+      addToast("拒否に失敗しました");
+      return;
+    }
+    addToast("申請を拒否しました");
+    fetchShares();
+  };
+
   const handleUnshare = async (shareId: string) => {
     const { error } = await supabase.from("shares").delete().eq("id", shareId);
     if (error) {
@@ -502,9 +513,14 @@ export default function Home() {
                   {pendingRequests.map((req) => (
                     <li key={req.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
                       <span className="text-sm">{req.applicant_username}さんから共有申請</span>
-                      <Button size="sm" onClick={() => handleApprove(req.id)}>
-                        承認する
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" onClick={() => handleApprove(req.id)}>
+                          承認する
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleReject(req.id)}>
+                          拒否
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>

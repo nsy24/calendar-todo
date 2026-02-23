@@ -29,6 +29,7 @@ DROP POLICY IF EXISTS "shares_update_receiver_only" ON shares;
 CREATE POLICY "shares_update_receiver_only" ON shares FOR UPDATE
   USING (auth.uid() = receiver_id);
 
+-- DELETE: 申請者（取り下げ）または承認者（拒否）のみ削除可能
 DROP POLICY IF EXISTS "shares_delete_own_or_receiver" ON shares;
 CREATE POLICY "shares_delete_own_or_receiver" ON shares FOR DELETE
   USING (auth.uid() = owner_id OR auth.uid() = receiver_id);
