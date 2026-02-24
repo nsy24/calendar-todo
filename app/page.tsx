@@ -162,6 +162,7 @@ export default function Home() {
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
   const profileRef = useRef(profile);
   const activePartnerUsernamesRef = useRef<string[]>([]);
@@ -272,10 +273,16 @@ export default function Home() {
   }, [session, fetchShares]);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!session) return;
     fetchTodos();
     if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+      Notification.requestPermission().then((p) => setNotificationPermission(p));
     }
     const t = setInterval(() => checkAndNotifyOverdue(), 60_000);
     return () => clearInterval(t);
@@ -806,6 +813,15 @@ export default function Home() {
             <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
               アバターをランダム生成
             </Button>
+            {typeof window !== "undefined" && "Notification" in window && notificationPermission === "default" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => Notification.requestPermission().then((p) => setNotificationPermission(p))}
+              >
+                通知を有効にする
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={handleLogout} title="ログアウト">
               <LogOut className="h-4 w-4" />
             </Button>
