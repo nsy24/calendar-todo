@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Calendar as CalendarIcon } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -365,6 +365,10 @@ export default function Home() {
   useEffect(() => {
     fetchCalendarMembers(currentCalendarId);
   }, [currentCalendarId, fetchCalendarMembers]);
+
+  useEffect(() => {
+    if (currentCalendarId) setAddPartnerError(null);
+  }, [currentCalendarId]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -931,15 +935,15 @@ export default function Home() {
     <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
-            {calendarsList.length > 0 && (
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-bold shrink-0">カレンダーTodoリスト</h1>
+            {calendarsList.length >= 1 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xl leading-none" aria-hidden>📅</span>
                 <select
                   value={currentCalendarId ?? ""}
                   onChange={(e) => setCurrentCalendarId(e.target.value || null)}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium min-w-[180px] focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm font-bold min-w-[180px] focus:outline-none focus:ring-2 focus:ring-ring"
                   aria-label="表示するカレンダーを選択"
                 >
                   {calendarsList.map((cal) => (
