@@ -820,23 +820,21 @@ export default function Home() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
           <div className="flex items-center gap-2 flex-wrap">
-            {calendarMembers.length > 0 && (
-              <div className="flex items-center gap-3 flex-wrap">
-                {calendarMembers.map((member) => {
-                  const seed = (member.avatar_seed?.trim() || member.username || "default") as string;
-                  const isSelf = member.id === session?.user?.id;
-                  return (
-                    <div key={member.id} className="flex items-center gap-2">
-                      <Avatar seed={seed} size={32} />
-                      <span className="text-sm text-muted-foreground">
-                        {member.username || "（未設定）"}
-                        {isSelf && <span className="ml-1 text-xs">(自分)</span>}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="flex items-center gap-3 flex-wrap">
+              {calendarMembers.map((member) => {
+                const seed = (member.avatar_seed?.trim() || member.username || "default") as string;
+                const isSelf = member.id === session?.user?.id;
+                return (
+                  <div key={member.id} className="flex items-center gap-2">
+                    <Avatar seed={seed} size={32} />
+                    <span className="text-sm text-muted-foreground">
+                      {member.username || "（未設定）"}
+                      {isSelf && <span className="ml-1 text-xs">(自分)</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
             <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
               アバターをランダム生成
             </Button>
@@ -943,26 +941,21 @@ export default function Home() {
               <CardTitle>{format(selectedDate, "yyyy年M月d日")} のTodo</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {useUsernameColors && usernameColorMap && (
-                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                  {Object.entries(usernameColorMap).map(([name, borderClass]) => (
-                    <span key={name} className="flex items-center gap-1.5">
-                      <Avatar seed={getAvatarSeedForUsername(name)} size={32} />
-                      <span
-                        className={cn(
-                          "inline-block w-3 h-3 rounded-sm",
-                          borderClass === "border-l-red-500" && "bg-red-500",
-                          borderClass === "border-l-blue-500" && "bg-blue-500",
-                          borderClass === "border-l-green-500" && "bg-green-500",
-                          borderClass === "border-l-amber-500" && "bg-amber-500",
-                          borderClass === "border-l-purple-500" && "bg-purple-500"
-                        )}
-                      />
-                      {name}
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                {calendarMembers.map((member) => {
+                  const seed = (member.avatar_seed?.trim() || member.username || "default") as string;
+                  const isSelf = member.id === session?.user?.id;
+                  return (
+                    <span key={member.id} className="flex items-center gap-1.5">
+                      <Avatar seed={seed} size={32} />
+                      <span>
+                        {member.username || "（未設定）"}
+                        {isSelf && <span className="ml-1 text-xs">(自分)</span>}
+                      </span>
                     </span>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Input placeholder="新しいTodoを追加..." value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1 min-w-[200px]" />
                 <div className="flex items-center gap-1" role="group" aria-label="優先度">
