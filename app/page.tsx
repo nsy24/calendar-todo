@@ -156,6 +156,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [calendarsList, setCalendarsList] = useState<CalendarItem[]>([]);
   const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
+  const [calendarsLoading, setCalendarsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
@@ -225,6 +226,30 @@ export default function Home() {
     fetchProfile();
   }, [fetchProfile]);
 
+  const createDefaultCalendar = React.useCallback(async (): Promise<CalendarItem | null> => {
+    if (!session?.user?.id) return null;
+    const { data: cal, error: calErr } = await supabase
+      .from("calendars")
+      .insert({ name: "マイカレンダー", created_by: session.user.id })
+      .select("id, name, created_by")
+      .single();
+    if (calErr || !cal) {
+      console.error("Failed to create default calendar", calErr);
+      return null;
+    }
+    const { error: memberErr } = await supabase.from("calendar_members").insert({
+      calendar_id: cal.id,
+      user_id: session.user.id,
+      role: "owner",
+      status: "active",
+    });
+    if (memberErr) {
+      console.error("Failed to add owner to default calendar", memberErr);
+      return null;
+    }
+    return { id: cal.id, name: cal.name, created_by: cal.created_by };
+  }, [session?.user?.id]);
+
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
     const { data: memberRows, error: memberErr } = await supabase
@@ -232,9 +257,19 @@ export default function Home() {
       .select("calendar_id")
       .eq("user_id", session.user.id)
       .eq("status", "active");
-    if (memberErr || !memberRows?.length) {
+    if (memberErr) {
+      console.error("Failed to fetch calendar_members", memberErr);
       setCalendarsList([]);
-      if (!memberErr) setCurrentCalendarId((prev) => prev || null);
+      return;
+    }
+    if (!memberRows?.length) {
+      const created = await createDefaultCalendar();
+      if (created) {
+        setCalendarsList([created]);
+        setCurrentCalendarId(created.id);
+      } else {
+        setCalendarsList([]);
+      }
       return;
     }
     const calendarIds = [...new Set((memberRows as { calendar_id: string }[]).map((r) => r.calendar_id))];
@@ -257,11 +292,15 @@ export default function Home() {
       if (prev && list.some((c) => c.id === prev)) return prev;
       return list.length > 0 ? list[0].id : null;
     });
-  }, [session?.user?.id]);
+  }, [session?.user?.id, createDefaultCalendar]);
 
   useEffect(() => {
-    if (!session) return;
-    fetchCalendars();
+    if (!session) {
+      setCalendarsLoading(false);
+      return;
+    }
+    setCalendarsLoading(true);
+    fetchCalendars().finally(() => setCalendarsLoading(false));
   }, [session, fetchCalendars]);
 
   const fetchCalendarMembers = React.useCallback(
@@ -945,8 +984,8 @@ export default function Home() {
             </Button>
           </div>
         </div>
-        {calendarsList.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-4">カレンダーがありません。Phase 1 のマイグレーション後、所属カレンダーがここに表示されます。</p>
+        {calendarsLoading && !currentCalendarId && (
+          <p className="text-sm text-muted-foreground mb-4">カレンダーを準備しています...</p>
         )}
         <Card className="mb-6">
           <CardHeader className="py-4">
