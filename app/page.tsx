@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Calendar as CalendarIcon } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -143,11 +143,19 @@ interface NotificationRow {
   is_read: boolean;
 }
 
+interface CalendarItem {
+  id: string;
+  name: string;
+  created_by: string;
+}
+
 export default function Home() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
+  const [calendarsList, setCalendarsList] = useState<CalendarItem[]>([]);
+  const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
@@ -217,60 +225,107 @@ export default function Home() {
     fetchProfile();
   }, [fetchProfile]);
 
-  const fetchShares = React.useCallback(async () => {
+  const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
-    const myId = session.user.id;
-    const { data: pendingRows, error: pendingErr } = await supabase
-      .from("shares")
-      .select("id,owner_id")
-      .eq("receiver_id", myId)
-      .eq("status", "pending");
-    if (pendingErr) {
-      console.error("Failed to fetch pending shares", pendingErr);
-    }
-    const applicantIds = (pendingRows || []).map((r: { owner_id: string }) => r.owner_id);
-    const pendingWithNames: PendingRequest[] = [];
-    if (applicantIds.length > 0) {
-      const { data: profiles } = await supabase.from("profiles").select("id,username").in("id", applicantIds);
-      const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
-      pendingRows?.forEach((r: { id: string; owner_id: string }) => {
-        pendingWithNames.push({ id: r.id, applicant_username: nameById.get(r.owner_id) ?? "?" });
-      });
-    }
-    setPendingRequests(pendingWithNames);
-
-    const { data: activeRows, error: activeErr } = await supabase
-      .from("shares")
-      .select("id,owner_id,receiver_id")
-      .or(`owner_id.eq.${myId},receiver_id.eq.${myId}`)
+    const { data: memberRows, error: memberErr } = await supabase
+      .from("calendar_members")
+      .select("calendar_id")
+      .eq("user_id", session.user.id)
       .eq("status", "active");
-    if (activeErr) {
-      console.error("Failed to fetch active shares", activeErr);
-      setActivePartners([]);
+    if (memberErr || !memberRows?.length) {
+      setCalendarsList([]);
+      if (!memberErr) setCurrentCalendarId((prev) => prev || null);
       return;
     }
-    const partnerIds = (activeRows || []).map((r: { owner_id: string; receiver_id: string }) => (r.owner_id === myId ? r.receiver_id : r.owner_id));
-    const activeWithNames: ActiveShare[] = [];
-    const nextPartnerProfiles: Record<string, { username: string; avatar_seed: string | null }> = {};
-    if (partnerIds.length > 0) {
-      const { data: profiles } = await supabase.from("profiles").select("id,username,avatar_seed").in("id", partnerIds);
-      const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
-      (profiles || []).forEach((p: { id: string; username: string | null; avatar_seed: string | null }) => {
-        nextPartnerProfiles[p.id] = { username: p.username ?? "", avatar_seed: p.avatar_seed ?? null };
-      });
-      activeRows?.forEach((r: { id: string; owner_id: string; receiver_id: string }) => {
-        const partnerId = r.owner_id === myId ? r.receiver_id : r.owner_id;
-        activeWithNames.push({ id: r.id, partner_user_id: partnerId, partner_username: nameById.get(partnerId) ?? "?" });
-      });
+    const calendarIds = [...new Set((memberRows as { calendar_id: string }[]).map((r) => r.calendar_id))];
+    const { data: calData, error: calErr } = await supabase
+      .from("calendars")
+      .select("id, name, created_by")
+      .in("id", calendarIds);
+    if (calErr) {
+      console.error("Failed to fetch calendars", calErr);
+      setCalendarsList([]);
+      return;
     }
-    setActivePartners(activeWithNames);
-    setPartnerProfiles(nextPartnerProfiles);
+    const list: CalendarItem[] = (calData || []).map((c: { id: string; name: string; created_by: string }) => ({
+      id: c.id,
+      name: c.name,
+      created_by: c.created_by,
+    }));
+    setCalendarsList(list);
+    setCurrentCalendarId((prev) => {
+      if (prev && list.some((c) => c.id === prev)) return prev;
+      return list.length > 0 ? list[0].id : null;
+    });
   }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session) return;
-    fetchShares();
-  }, [session, fetchShares]);
+    fetchCalendars();
+  }, [session, fetchCalendars]);
+
+  const fetchCalendarMembers = React.useCallback(
+    async (calendarId: string | null) => {
+      if (!session?.user?.id) return;
+      if (!calendarId) {
+        setPendingRequests([]);
+        setActivePartners([]);
+        setPartnerProfiles({});
+        return;
+      }
+      const myId = session.user.id;
+      const { data: pendingRows, error: pendingErr } = await supabase
+        .from("calendar_members")
+        .select("id, invited_by")
+        .eq("calendar_id", calendarId)
+        .eq("user_id", myId)
+        .eq("status", "pending");
+      if (pendingErr) console.error("Failed to fetch pending calendar_members", pendingErr);
+      const inviterIds = (pendingRows || []).map((r: { invited_by: string | null }) => r.invited_by).filter(Boolean) as string[];
+      const pendingWithNames: PendingRequest[] = [];
+      if (inviterIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("id,username").in("id", inviterIds);
+        const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+        pendingRows?.forEach((r: { id: string; invited_by: string | null }) => {
+          pendingWithNames.push({ id: r.id, applicant_username: nameById.get(r.invited_by ?? "") ?? "?" });
+        });
+      }
+      setPendingRequests(pendingWithNames);
+
+      const { data: memberRows, error: memberErr } = await supabase
+        .from("calendar_members")
+        .select("id, user_id")
+        .eq("calendar_id", calendarId)
+        .eq("status", "active")
+        .neq("user_id", myId);
+      if (memberErr) {
+        console.error("Failed to fetch calendar members", memberErr);
+        setActivePartners([]);
+        setPartnerProfiles({});
+        return;
+      }
+      const partnerIds = (memberRows || []).map((r: { user_id: string }) => r.user_id);
+      const activeWithNames: ActiveShare[] = [];
+      const nextPartnerProfiles: Record<string, { username: string; avatar_seed: string | null }> = {};
+      if (partnerIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("id,username,avatar_seed").in("id", partnerIds);
+        const nameById = new Map((profiles || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+        (profiles || []).forEach((p: { id: string; username: string | null; avatar_seed: string | null }) => {
+          nextPartnerProfiles[p.id] = { username: p.username ?? "", avatar_seed: p.avatar_seed ?? null };
+        });
+        memberRows?.forEach((r: { id: string; user_id: string }) => {
+          activeWithNames.push({ id: r.id, partner_user_id: r.user_id, partner_username: nameById.get(r.user_id) ?? "?" });
+        });
+      }
+      setActivePartners(activeWithNames);
+      setPartnerProfiles(nextPartnerProfiles);
+    },
+    [session?.user?.id]
+  );
+
+  useEffect(() => {
+    fetchCalendarMembers(currentCalendarId);
+  }, [currentCalendarId, fetchCalendarMembers]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -290,9 +345,9 @@ export default function Home() {
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !currentCalendarId) return;
     fetchTodos();
-  }, [session, activePartners]);
+  }, [session, currentCalendarId, activePartners]);
 
   const fetchNotifications = React.useCallback(async () => {
     if (!session?.user?.id) return;
@@ -339,15 +394,20 @@ export default function Home() {
   }, [showNotifications, session?.user?.id, fetchNotifications, markNotificationsRead]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !currentCalendarId) return;
     const channel = supabase
-      .channel("todos-changes")
+      .channel(`todos-changes-${currentCalendarId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "todos" },
+        {
+          event: "*",
+          schema: "public",
+          table: "todos",
+          filter: `calendar_id=eq.${currentCalendarId}`,
+        },
         (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           const myUsername = profileRef.current?.username?.trim();
-          const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string; priority?: Priority } | null;
+          const newRow = payload.new as { title?: string; completed?: boolean; created_by_username?: string | null; user_id?: string; priority?: Priority; calendar_id?: string } | null;
           const oldRow = payload.old as { title?: string; completed?: boolean; created_by_username?: string | null; priority?: Priority } | null;
           const who = (newRow?.created_by_username || oldRow?.created_by_username || "").trim() || "誰か";
           const isFromMe = who === myUsername;
@@ -376,7 +436,7 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, addToast]);
+  }, [session, currentCalendarId, addToast]);
 
   const activePartnerIdsRef = useRef<Set<string>>(new Set());
   activePartnerIdsRef.current = new Set(activePartners.map((p) => p.partner_user_id));
@@ -415,34 +475,22 @@ export default function Home() {
   const fetchTodosRef = useRef<() => Promise<void>>(async () => {});
 
   async function fetchTodos() {
-    if (!session?.user?.id) return;
-    const partnerUserIds = activePartners.map((p) => p.partner_user_id);
-    const myRes = await supabase
-      .from("todos")
-      .select("id,title,completed,date,created_by_username,priority,position,user_id")
-      .eq("user_id", session.user.id)
-      .order("date", { ascending: true });
-    if (myRes.error) {
-      console.error("Failed to fetch todos", myRes.error);
-      alert("予定の取得に失敗しました: " + (myRes.error.message || JSON.stringify(myRes.error)));
+    if (!session?.user?.id || !currentCalendarId) {
+      setTodos([]);
       return;
     }
-    let allRows: any[] = [...(myRes.data || [])];
-    if (partnerUserIds.length > 0) {
-        const partnerRes = await supabase
-        .from("todos")
-        .select("id,title,completed,date,created_by_username,priority,position,user_id")
-        .in("user_id", partnerUserIds)
-        .order("date", { ascending: true });
-      if (!partnerRes.error && partnerRes.data?.length) {
-        const myIds = new Set((myRes.data || []).map((r: any) => r.id));
-        partnerRes.data.forEach((r: any) => {
-          if (!myIds.has(r.id)) allRows.push(r);
-        });
-      }
+    const { data, error } = await supabase
+      .from("todos")
+      .select("id,title,completed,date,created_by_username,priority,position,user_id")
+      .eq("calendar_id", currentCalendarId)
+      .order("date", { ascending: true });
+    if (error) {
+      console.error("Failed to fetch todos", error);
+      alert("予定の取得に失敗しました: " + (error.message || JSON.stringify(error)));
+      setTodos([]);
+      return;
     }
-    allRows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const mapped: Todo[] = allRows.map((r: any) => ({
+    const mapped: Todo[] = (data || []).map((r: any) => ({
       id: String(r.id),
       text: r.title,
       completed: r.completed,
@@ -458,6 +506,10 @@ export default function Home() {
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentCalendarId) {
+      setAddPartnerError("カレンダーを選択してください");
+      return;
+    }
     const errMsg = validateUsername(newPartnerInput);
     if (errMsg) {
       setAddPartnerError(errMsg);
@@ -485,9 +537,13 @@ export default function Home() {
       return;
     }
     setAddPartnerLoading(true);
-    const { error } = await supabase
-      .from("shares")
-      .insert({ owner_id: session!.user.id, receiver_id: profileRow.id, status: "pending" });
+    const { error } = await supabase.from("calendar_members").insert({
+      calendar_id: currentCalendarId,
+      user_id: profileRow.id,
+      role: "member",
+      status: "pending",
+      invited_by: session!.user.id,
+    });
     setAddPartnerLoading(false);
     if (error) {
       if (error.code === "23505") setAddPartnerError("既に申請済みか、共有済みです");
@@ -496,40 +552,44 @@ export default function Home() {
     }
     setNewPartnerInput("");
     addToast("共有申請を送りました");
-    fetchShares();
+    fetchCalendarMembers(currentCalendarId);
   };
 
-  const handleApprove = async (shareId: string) => {
-    const { error } = await supabase.from("shares").update({ status: "active" }).eq("id", shareId).eq("receiver_id", session!.user.id);
+  const handleApprove = async (memberId: string) => {
+    const { error } = await supabase
+      .from("calendar_members")
+      .update({ status: "active" })
+      .eq("id", memberId)
+      .eq("user_id", session!.user.id);
     if (error) {
       console.error("Approve error", error);
       addToast("承認に失敗しました");
       return;
     }
     addToast("共有を承認しました");
-    fetchShares().then(() => fetchTodos());
+    fetchCalendarMembers(currentCalendarId).then(() => fetchTodos());
   };
 
-  const handleReject = async (shareId: string) => {
-    const { error } = await supabase.from("shares").delete().eq("id", shareId);
+  const handleReject = async (memberId: string) => {
+    const { error } = await supabase.from("calendar_members").delete().eq("id", memberId).eq("user_id", session!.user.id);
     if (error) {
       console.error("Reject error", error);
       addToast("拒否に失敗しました");
       return;
     }
     addToast("申請を拒否しました");
-    fetchShares();
+    fetchCalendarMembers(currentCalendarId);
   };
 
-  const handleUnshare = async (shareId: string) => {
-    const { error } = await supabase.from("shares").delete().eq("id", shareId);
+  const handleUnshare = async (memberId: string) => {
+    const { error } = await supabase.from("calendar_members").delete().eq("id", memberId);
     if (error) {
       console.error("Unshare error", error);
       addToast("解除に失敗しました");
       return;
     }
     addToast("共有を解除しました");
-    fetchShares().then(() => fetchTodos());
+    fetchCalendarMembers(currentCalendarId).then(() => fetchTodos());
   };
 
   function checkAndNotifyOverdue() {
@@ -644,12 +704,26 @@ export default function Home() {
       console.error("handleSubmit: newTodoText is empty");
       return;
     }
+    if (!currentCalendarId) {
+      addToast("カレンダーを選択してください");
+      return;
+    }
     const title = newTodoText.trim();
     const date = format(selectedDate, "yyyy-MM-dd");
     try {
       const { data, error } = await supabase
         .from("todos")
-        .insert([{ title, date, user_id: session.user.id, created_by_username: profile.username.trim(), priority: newTodoPriority, position: 0 }])
+        .insert([
+          {
+            title,
+            date,
+            calendar_id: currentCalendarId,
+            user_id: session.user.id,
+            created_by_username: profile.username.trim(),
+            priority: newTodoPriority,
+            position: 0,
+          },
+        ])
         .select();
       if (error) {
         console.error("supabase insert error", error);
@@ -817,8 +891,27 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
+            {calendarsList.length > 0 && (
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-muted-foreground shrink-0" aria-hidden />
+                <select
+                  value={currentCalendarId ?? ""}
+                  onChange={(e) => setCurrentCalendarId(e.target.value || null)}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium min-w-[180px] focus:outline-none focus:ring-2 focus:ring-ring"
+                  aria-label="表示するカレンダーを選択"
+                >
+                  {calendarsList.map((cal) => (
+                    <option key={cal.id} value={cal.id}>
+                      {cal.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
               {calendarMembers.map((member) => {
@@ -852,6 +945,9 @@ export default function Home() {
             </Button>
           </div>
         </div>
+        {calendarsList.length === 0 && (
+          <p className="text-sm text-muted-foreground mb-4">カレンダーがありません。Phase 1 のマイグレーション後、所属カレンダーがここに表示されます。</p>
+        )}
         <Card className="mb-6">
           <CardHeader className="py-4">
             <CardTitle className="text-base flex items-center gap-2">
