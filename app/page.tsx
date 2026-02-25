@@ -621,6 +621,20 @@ export default function Home() {
 
   const useUsernameColors = usernameColorMap !== null;
 
+  // このカレンダーを共有している参加メンバー全員（自分＋パートナー）。DBの最新プロフィールで表示用に利用
+  const calendarMembers = useMemo(() => {
+    const self = session?.user?.id && profile
+      ? { id: session.user.id, username: profile.username?.trim() ?? "", avatar_seed: profile.avatar_seed ?? null }
+      : null;
+    const partners = activePartners.map((p) => ({
+      id: p.partner_user_id,
+      username: (partnerProfiles[p.partner_user_id]?.username ?? p.partner_username)?.trim() ?? "",
+      avatar_seed: partnerProfiles[p.partner_user_id]?.avatar_seed ?? null,
+    }));
+    const list = self ? [self, ...partners] : partners;
+    return list;
+  }, [session?.user?.id, profile, activePartners, partnerProfiles]);
+
   const handleSubmit = async () => {
     if (!session?.user?.id || !profile?.username?.trim()) {
       console.error("handleSubmit: not logged in or username missing");
@@ -806,10 +820,23 @@ export default function Home() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">カレンダーTodoリスト</h1>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Avatar seed={avatarSeed} size={32} />
-              <span className="text-sm text-muted-foreground">{displayName}</span>
-            </div>
+            {calendarMembers.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {calendarMembers.map((member) => {
+                  const seed = (member.avatar_seed?.trim() || member.username || "default") as string;
+                  const isSelf = member.id === session?.user?.id;
+                  return (
+                    <div key={member.id} className="flex items-center gap-2">
+                      <Avatar seed={seed} size={32} />
+                      <span className="text-sm text-muted-foreground">
+                        {member.username || "（未設定）"}
+                        {isSelf && <span className="ml-1 text-xs">(自分)</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
               アバターをランダム生成
             </Button>
