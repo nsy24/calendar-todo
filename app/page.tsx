@@ -935,25 +935,28 @@ export default function Home() {
     <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap border-2 border-red-500 p-2" style={{ border: "2px solid red" }}>
             <h1 className="text-3xl font-bold shrink-0">カレンダーTodoリスト</h1>
-            {calendarsList.length >= 1 && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xl leading-none" aria-hidden>📅</span>
-                <select
-                  value={currentCalendarId ?? ""}
-                  onChange={(e) => setCurrentCalendarId(e.target.value || null)}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm font-bold min-w-[180px] focus:outline-none focus:ring-2 focus:ring-ring"
-                  aria-label="表示するカレンダーを選択"
-                >
-                  {calendarsList.map((cal) => (
+            <div className="relative z-50 flex items-center gap-2 shrink-0">
+              <span className="text-xl leading-none" aria-hidden>📅</span>
+              <select
+                value={currentCalendarId ?? ""}
+                onChange={(e) => setCurrentCalendarId(e.target.value || null)}
+                className="min-w-[200px] px-3 py-2 font-bold"
+                style={{ backgroundColor: "yellow" }}
+                aria-label="表示するカレンダーを選択"
+              >
+                {calendarsList.length === 0 ? (
+                  <option value="">カレンダーを準備中...</option>
+                ) : (
+                  calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
                       {cal.name}
                     </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  ))
+                )}
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
@@ -999,6 +1002,27 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-4">
+            <div className="relative z-50 flex items-center gap-2 py-2">
+              <label htmlFor="calendar-switch-below" className="text-sm font-medium shrink-0">表示するカレンダー:</label>
+              <select
+                id="calendar-switch-below"
+                value={currentCalendarId ?? ""}
+                onChange={(e) => setCurrentCalendarId(e.target.value || null)}
+                className="min-w-[200px] px-3 py-2 font-bold"
+                style={{ backgroundColor: "yellow" }}
+                aria-label="表示するカレンダーを選択（下）"
+              >
+                {calendarsList.length === 0 ? (
+                  <option value="">カレンダーを準備中...</option>
+                ) : (
+                  calendarsList.map((cal) => (
+                    <option key={cal.id} value={cal.id}>
+                      {cal.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
             <form onSubmit={handleApply} className="flex gap-2 flex-wrap items-center">
               <Input
                 placeholder="仲間のユーザー名を入力（半角英数字・. _ -）"
