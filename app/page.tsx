@@ -189,6 +189,8 @@ export default function Home() {
   const profileRef = useRef(profile);
   const activePartnerUsernamesRef = useRef<string[]>([]);
   const sessionRef = useRef(session);
+  const calendarsAutoRetryCountRef = useRef(0);
+  const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
   profileRef.current = profile;
   activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
   sessionRef.current = session;
@@ -281,6 +283,7 @@ export default function Home() {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
         setCalendarsLoadError(null);
+        calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
         setCalendarsLoadError(error.message || "カレンダーの取得に失敗しました");
@@ -306,6 +309,7 @@ export default function Home() {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
         setCalendarsLoadError(null);
+        calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
         setCalendarsLoadError("カレンダーがありません。作成に失敗しました。");
@@ -319,6 +323,7 @@ export default function Home() {
       return list[0].id;
     });
     setCalendarsLoadError(null);
+    calendarsAutoRetryCountRef.current = 0;
   }, [session?.user?.id, createDefaultCalendar]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
@@ -326,10 +331,20 @@ export default function Home() {
     setCalendarsLoadError(null);
     setCalendarsLoading(true);
     const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
-    Promise.race([fetchCalendars(), timeout]).catch((err) => {
-      setCalendarsLoadError(err?.message === "timeout" ? "読み込みがタイムアウトしました（5秒）" : "読み込みに失敗しました");
-    }).finally(() => setCalendarsLoading(false));
+    Promise.race([fetchCalendars(), timeout])
+      .catch((err) => {
+        const msg = err?.message ?? "";
+        const isInfiniteRecursion = /infinite|recursion|Maximum update|Too many re-renders/i.test(msg) || (typeof msg === "string" && msg.includes("recursion"));
+        const displayMsg = err?.message === "timeout" ? "読み込みがタイムアウトしました（5秒）" : isInfiniteRecursion ? "読み込み中にエラーが発生しました" : "読み込みに失敗しました";
+        setCalendarsLoadError(displayMsg);
+        if (isInfiniteRecursion && calendarsAutoRetryCountRef.current < 1) {
+          calendarsAutoRetryCountRef.current += 1;
+          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 3000);
+        }
+      })
+      .finally(() => setCalendarsLoading(false));
   }, [session?.user?.id, fetchCalendars]);
+  runFetchCalendarsWithTimeoutRef.current = runFetchCalendarsWithTimeout;
 
   useEffect(() => {
     if (!session?.user?.id) {
@@ -1119,7 +1134,7 @@ export default function Home() {
                 aria-label="表示するカレンダーを選択"
               >
                 {calendarsList.length === 0 ? (
-                  <option value="">カレンダーを準備中...</option>
+                  <option value="">{calendarsLoading ? "カレンダーを準備中..." : "カレンダーを作成してください"}</option>
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
@@ -1389,7 +1404,7 @@ export default function Home() {
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="カレンダー名（例：弟との共有、旅行の計画など）"
+                placeholder="家族の予定、プロジェクト、旅行の計画など"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
