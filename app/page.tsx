@@ -164,7 +164,6 @@ export default function Home() {
   const [calendarsList, setCalendarsList] = useState<CalendarItem[]>([]);
   const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
   const [calendarsLoading, setCalendarsLoading] = useState(true);
-  const [calendarsLoadError, setCalendarsLoadError] = useState<string | null>(null);
   const [calendarsReconnecting, setCalendarsReconnecting] = useState(false);
   const [calendarsEmptyPrompt, setCalendarsEmptyPrompt] = useState<string | null>(null);
   const [calendarsAutoCreating, setCalendarsAutoCreating] = useState(false);
@@ -249,7 +248,7 @@ export default function Home() {
     if (!session?.user?.id) return null;
     const { data: cal, error: calErr } = await supabase
       .from("calendars")
-      .insert({ name: "マイ・ワークスペース", created_by: session.user.id })
+      .insert({ name: "マイカレンダー", created_by: session.user.id })
       .select("id, name, created_by")
       .single();
     if (calErr || !cal) {
@@ -272,7 +271,6 @@ export default function Home() {
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
     const myId = session.user.id;
-    setCalendarsLoadError(null);
     setCalendarsEmptyPrompt(null);
 
     const { data: memberRows, error } = await supabase
@@ -287,7 +285,6 @@ export default function Home() {
       if (fallback) {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
-        setCalendarsLoadError(null);
         setCalendarsReconnecting(false);
         setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
@@ -315,7 +312,6 @@ export default function Home() {
       if (created) {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
-        setCalendarsLoadError(null);
         setCalendarsReconnecting(false);
         setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
@@ -331,7 +327,6 @@ export default function Home() {
       if (prev && list.some((c) => c.id === prev)) return prev;
       return list[0].id;
     });
-    setCalendarsLoadError(null);
     setCalendarsReconnecting(false);
     setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
@@ -339,7 +334,6 @@ export default function Home() {
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
     if (!session?.user?.id) return;
-    setCalendarsLoadError(null);
     setCalendarsEmptyPrompt(null);
     setCalendarsLoading(true);
     const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
@@ -358,7 +352,6 @@ export default function Home() {
   useEffect(() => {
     if (!session?.user?.id) {
       setCalendarsLoading(false);
-      setCalendarsLoadError(null);
       setCalendarsReconnecting(false);
       setCalendarsEmptyPrompt(null);
       setCalendarsAutoCreating(false);
@@ -386,7 +379,6 @@ export default function Home() {
         if (created) {
           setCalendarsList([created]);
           setCurrentCalendarId(created.id);
-          setCalendarsLoadError(null);
           setCalendarsReconnecting(false);
           setCalendarsEmptyPrompt(null);
           calendarsAutoRetryCountRef.current = 0;
@@ -1176,11 +1168,11 @@ export default function Home() {
                 aria-label="表示するカレンダーを選択"
               >
                 {calendarsList.length === 0 ? (
-                  <option value="">{calendarsLoading ? "同期中..." : "ワークスペースを作成してください"}</option>
+                  <option value="">{calendarsLoading ? "同期中..." : "マイカレンダー（個人用）"}</option>
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
-                      {cal.name}
+                      {cal.name === "マイカレンダー" ? "マイカレンダー（個人用）" : cal.name}
                     </option>
                   ))
                 )}
@@ -1330,7 +1322,7 @@ export default function Home() {
             )}
             {activePartners.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">プロジェクトメンバーの進捗がカレンダーに同期されます</p>
+                <p className="text-sm font-medium text-muted-foreground">このワークスペースにチームメンバーを招待します</p>
                 <ul className="space-y-1">
                   {activePartners.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
@@ -1449,11 +1441,11 @@ export default function Home() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold mb-1">ワークスペースを作成</h2>
-            <p className="text-sm text-muted-foreground mb-3">ビジネスチームで共有するカレンダーを作成します</p>
+            <p className="text-sm text-muted-foreground mb-3">プロジェクト用・チーム共有用のワークスペースです。作成後にメンバーを招待できます。</p>
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="第1プロジェクト、営業1課 共有用、クライアントA社 案件など"
+                placeholder="例：第1プロジェクト、営業1課共有用、クライアントA社案件"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
