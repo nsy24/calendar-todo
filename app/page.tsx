@@ -248,7 +248,7 @@ export default function Home() {
     if (!session?.user?.id) return null;
     const { data: cal, error: calErr } = await supabase
       .from("calendars")
-      .insert({ name: "マイカレンダー", created_by: session.user.id })
+      .insert({ name: "マイカレンダー（個人用）", created_by: session.user.id })
       .select("id, name, created_by")
       .single();
     if (calErr || !cal) {
@@ -317,7 +317,8 @@ export default function Home() {
         calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsEmptyPrompt("最初のワークスペースを作成しましょう");
+        setCalendarsReconnecting(true);
+        setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
       }
       return;
     }
@@ -383,7 +384,9 @@ export default function Home() {
           setCalendarsEmptyPrompt(null);
           calendarsAutoRetryCountRef.current = 0;
         } else {
-          setCalendarsEmptyPrompt("最初のワークスペースを作成しましょう");
+          calendarsAutoCreateAttemptedRef.current = false;
+          setCalendarsReconnecting(true);
+          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
         }
       })
       .finally(() => setCalendarsAutoCreating(false));
@@ -1172,7 +1175,7 @@ export default function Home() {
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
-                      {cal.name === "マイカレンダー" ? "マイカレンダー（個人用）" : cal.name}
+                      {cal.name}
                     </option>
                   ))
                 )}
@@ -1236,15 +1239,7 @@ export default function Home() {
         {calendarsAutoCreating && (
           <p className="text-sm text-muted-foreground mb-4">初期設定を行っています...</p>
         )}
-        {calendarsEmptyPrompt && (
-          <div className="mb-4 p-3 rounded-md border border-border bg-muted/30">
-            <p className="text-sm text-muted-foreground mb-2">{calendarsEmptyPrompt}</p>
-            <Button variant="outline" size="sm" onClick={() => runFetchCalendarsWithTimeout()}>
-              ワークスペースを作成
-            </Button>
-          </div>
-        )}
-        {!calendarsLoading && !calendarsReconnecting && !calendarsEmptyPrompt && !calendarsAutoCreating && calendarsList.length === 0 && (
+        {!calendarsLoading && !calendarsReconnecting && !calendarsAutoCreating && calendarsList.length === 0 && (
           <p className="text-sm text-muted-foreground mb-4">ワークスペースを同期中、または未作成です。</p>
         )}
         {receivedInvitations.length > 0 && (
@@ -1445,7 +1440,7 @@ export default function Home() {
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="例：第1プロジェクト、営業1課共有用、クライアントA社案件"
+                placeholder="第1プロジェクト、営業1課 共有用 など"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
