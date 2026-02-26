@@ -193,6 +193,7 @@ export default function Home() {
   const sessionRef = useRef(session);
   const calendarsAutoRetryCountRef = useRef(0);
   const calendarsAutoCreateAttemptedRef = useRef(false);
+  const infiniteRecursionMessageShownRef = useRef(false);
   const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
   profileRef.current = profile;
   activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
@@ -205,6 +206,19 @@ export default function Home() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 5000);
   }, []);
+
+  const isInfiniteRecursionError = React.useCallback((err: { message?: string; code?: string } | null) => {
+    if (!err) return false;
+    const msg = (err.message ?? "").toLowerCase();
+    const code = (err.code ?? "").toLowerCase();
+    return msg.includes("infinite recursion") || code.includes("infinite recursion");
+  }, []);
+
+  const showReloadMessageOnce = React.useCallback(() => {
+    if (infiniteRecursionMessageShownRef.current) return;
+    infiniteRecursionMessageShownRef.current = true;
+    addToast("データベースのキャッシュが古い可能性があります。ページをリロードしてください。");
+  }, [addToast]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -253,8 +267,10 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("[createDefaultCalendar] calendars 作成失敗:", calErr?.message, calErr?.code, calErr?.details);
+      if (calErr && isInfiniteRecursionError(calErr)) showReloadMessageOnce();
       return null;
     }
+    // calendar_members は RLS 自己完結のため、user_id のみ指定した単純な insert
     const { error: memberErr } = await supabase.from("calendar_members").insert({
       calendar_id: cal.id,
       user_id: session.user.id,
@@ -263,10 +279,11 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("[createDefaultCalendar] calendar_members 登録失敗:", memberErr.message, memberErr.code, memberErr.details);
+      if (isInfiniteRecursionError(memberErr)) showReloadMessageOnce();
       return null;
     }
     return { id: cal.id, name: cal.name, created_by: cal.created_by };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, isInfiniteRecursionError, showReloadMessageOnce]);
 
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
@@ -281,6 +298,7 @@ export default function Home() {
 
     if (error) {
       console.error("[fetchCalendars] 取得失敗:", error.message, error.code, error.details);
+      if (isInfiniteRecursionError(error)) showReloadMessageOnce();
       const fallback = await createDefaultCalendar();
       if (fallback) {
         setCalendarsList([fallback]);
@@ -331,7 +349,7 @@ export default function Home() {
     setCalendarsReconnecting(false);
     setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
-  }, [session?.user?.id, createDefaultCalendar]);
+  }, [session?.user?.id, createDefaultCalendar, isInfiniteRecursionError, showReloadMessageOnce]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
     if (!session?.user?.id) return;
@@ -1117,10 +1135,12 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("Failed to create calendar", calErr);
+      if (calErr && isInfiniteRecursionError(calErr)) showReloadMessageOnce();
       setCreateCalendarError(calErr?.message ?? "カレンダーの作成に失敗しました");
       setCreateCalendarLoading(false);
       return;
     }
+    // calendar_members は RLS 自己完結のため、user_id のみ指定した単純な insert
     const { error: memberErr } = await supabase.from("calendar_members").insert({
       calendar_id: cal.id,
       user_id: session.user.id,
@@ -1129,6 +1149,7 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("Failed to add owner to new calendar", memberErr);
+      if (isInfiniteRecursionError(memberErr)) showReloadMessageOnce();
       setCreateCalendarError("カレンダーの設定に失敗しました");
       setCreateCalendarLoading(false);
       return;
