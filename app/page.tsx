@@ -167,6 +167,7 @@ export default function Home() {
   const [calendarsLoadError, setCalendarsLoadError] = useState<string | null>(null);
   const [calendarsReconnecting, setCalendarsReconnecting] = useState(false);
   const [calendarsEmptyPrompt, setCalendarsEmptyPrompt] = useState<string | null>(null);
+  const [calendarsAutoCreating, setCalendarsAutoCreating] = useState(false);
   const [showCreateCalendarModal, setShowCreateCalendarModal] = useState(false);
   const [newCalendarName, setNewCalendarName] = useState("");
   const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
@@ -192,6 +193,7 @@ export default function Home() {
   const activePartnerUsernamesRef = useRef<string[]>([]);
   const sessionRef = useRef(session);
   const calendarsAutoRetryCountRef = useRef(0);
+  const calendarsAutoCreateAttemptedRef = useRef(false);
   const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
   profileRef.current = profile;
   activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
@@ -359,10 +361,41 @@ export default function Home() {
       setCalendarsLoadError(null);
       setCalendarsReconnecting(false);
       setCalendarsEmptyPrompt(null);
+      setCalendarsAutoCreating(false);
+      calendarsAutoCreateAttemptedRef.current = false;
       return;
     }
     runFetchCalendarsWithTimeout();
   }, [session?.user?.id, runFetchCalendarsWithTimeout]);
+
+  useEffect(() => {
+    if (session?.user?.id) calendarsAutoCreateAttemptedRef.current = false;
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (calendarsList.length > 0) calendarsAutoCreateAttemptedRef.current = false;
+  }, [calendarsList.length]);
+
+  useEffect(() => {
+    if (!session?.user?.id || calendarsLoading || calendarsList.length > 0) return;
+    if (calendarsAutoCreateAttemptedRef.current) return;
+    calendarsAutoCreateAttemptedRef.current = true;
+    setCalendarsAutoCreating(true);
+    createDefaultCalendar()
+      .then((created) => {
+        if (created) {
+          setCalendarsList([created]);
+          setCurrentCalendarId(created.id);
+          setCalendarsLoadError(null);
+          setCalendarsReconnecting(false);
+          setCalendarsEmptyPrompt(null);
+          calendarsAutoRetryCountRef.current = 0;
+        } else {
+          setCalendarsEmptyPrompt("最初のワークスペースを作成しましょう");
+        }
+      })
+      .finally(() => setCalendarsAutoCreating(false));
+  }, [session?.user?.id, calendarsLoading, calendarsList.length, createDefaultCalendar]);
 
   const fetchCalendarMembers = React.useCallback(
     async (calendarId: string | null) => {
@@ -1208,6 +1241,9 @@ export default function Home() {
         {calendarsReconnecting && (
           <p className="text-sm text-muted-foreground mb-4">再接続中...</p>
         )}
+        {calendarsAutoCreating && (
+          <p className="text-sm text-muted-foreground mb-4">初期設定を行っています...</p>
+        )}
         {calendarsEmptyPrompt && (
           <div className="mb-4 p-3 rounded-md border border-border bg-muted/30">
             <p className="text-sm text-muted-foreground mb-2">{calendarsEmptyPrompt}</p>
@@ -1216,8 +1252,8 @@ export default function Home() {
             </Button>
           </div>
         )}
-        {!calendarsLoading && !calendarsReconnecting && !calendarsEmptyPrompt && calendarsList.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-4">ワークスペースがありません。</p>
+        {!calendarsLoading && !calendarsReconnecting && !calendarsEmptyPrompt && !calendarsAutoCreating && calendarsList.length === 0 && (
+          <p className="text-sm text-muted-foreground mb-4">ワークスペースを同期中、または未作成です。</p>
         )}
         {receivedInvitations.length > 0 && (
           <Card className="mb-4">
