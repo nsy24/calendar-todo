@@ -157,6 +157,10 @@ export default function Home() {
   const [calendarsList, setCalendarsList] = useState<CalendarItem[]>([]);
   const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
   const [calendarsLoading, setCalendarsLoading] = useState(true);
+  const [showCreateCalendarModal, setShowCreateCalendarModal] = useState(false);
+  const [newCalendarName, setNewCalendarName] = useState("");
+  const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
+  const [createCalendarError, setCreateCalendarError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
@@ -951,6 +955,52 @@ export default function Home() {
     return name;
   }
 
+  const handleCreateCalendar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newCalendarName.trim();
+    if (!name) {
+      setCreateCalendarError("カレンダー名を入力してください");
+      return;
+    }
+    if (name.length > 100) {
+      setCreateCalendarError("カレンダー名は100文字以内にしてください");
+      return;
+    }
+    if (!session?.user?.id) return;
+    setCreateCalendarError(null);
+    setCreateCalendarLoading(true);
+    const { data: cal, error: calErr } = await supabase
+      .from("calendars")
+      .insert({ name, created_by: session.user.id })
+      .select("id, name, created_by")
+      .single();
+    if (calErr || !cal) {
+      console.error("Failed to create calendar", calErr);
+      setCreateCalendarError(calErr?.message ?? "カレンダーの作成に失敗しました");
+      setCreateCalendarLoading(false);
+      return;
+    }
+    const { error: memberErr } = await supabase.from("calendar_members").insert({
+      calendar_id: cal.id,
+      user_id: session.user.id,
+      role: "owner",
+      status: "active",
+    });
+    if (memberErr) {
+      console.error("Failed to add owner to new calendar", memberErr);
+      setCreateCalendarError("カレンダーの設定に失敗しました");
+      setCreateCalendarLoading(false);
+      return;
+    }
+    const newItem: CalendarItem = { id: cal.id, name: cal.name, created_by: cal.created_by };
+    setCalendarsList((prev) => [...prev, newItem]);
+    setCurrentCalendarId(cal.id);
+    setNewCalendarName("");
+    setShowCreateCalendarModal(false);
+    setCreateCalendarLoading(false);
+    addToast("カレンダーを作成しました");
+  };
+
   const handleRandomAvatar = async () => {
     if (!session?.user?.id) return;
     const seed = crypto.randomUUID();
@@ -989,6 +1039,21 @@ export default function Home() {
                   ))
                 )}
               </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCreateCalendarError(null);
+                  setNewCalendarName("");
+                  setShowCreateCalendarModal(true);
+                }}
+                className="shrink-0"
+                title="新しいカレンダーを作成"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                新規作成
+              </Button>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1184,6 +1249,48 @@ export default function Home() {
           </Card>
         </div>
       </div>
+      {showCreateCalendarModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !createCalendarLoading && setShowCreateCalendarModal(false)}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold mb-3">新しいカレンダーを作成</h2>
+            <form onSubmit={handleCreateCalendar} className="space-y-3">
+              <Input
+                type="text"
+                placeholder="カレンダー名（例：弟との共有、旅行の計画など）"
+                value={newCalendarName}
+                onChange={(e) => {
+                  setNewCalendarName(e.target.value);
+                  setCreateCalendarError(null);
+                }}
+                maxLength={100}
+                className="w-full"
+                autoFocus
+                disabled={createCalendarLoading}
+              />
+              {createCalendarError && <p className="text-sm text-destructive">{createCalendarError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => !createCalendarLoading && setShowCreateCalendarModal(false)}
+                  disabled={createCalendarLoading}
+                >
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={createCalendarLoading}>
+                  {createCalendarLoading ? "作成中..." : "作成する"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showNotifications && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowNotifications(false)}>
           <div className="bg-card border rounded-lg shadow-lg max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
