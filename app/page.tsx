@@ -234,7 +234,7 @@ export default function Home() {
       .select("id, name, created_by")
       .single();
     if (calErr || !cal) {
-      console.error("Failed to create default calendar", calErr);
+      console.error("[createDefaultCalendar] calendars 作成失敗:", calErr?.message, calErr?.code, calErr?.details);
       return null;
     }
     const { error: memberErr } = await supabase.from("calendar_members").insert({
@@ -244,7 +244,7 @@ export default function Home() {
       status: "active",
     });
     if (memberErr) {
-      console.error("Failed to add owner to default calendar", memberErr);
+      console.error("[createDefaultCalendar] calendar_members 登録失敗:", memberErr.message, memberErr.code, memberErr.details);
       return null;
     }
     return { id: cal.id, name: cal.name, created_by: cal.created_by };
@@ -252,16 +252,26 @@ export default function Home() {
 
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
+    const myId = session.user.id;
+
     const { data: memberRows, error: memberErr } = await supabase
       .from("calendar_members")
       .select("calendar_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", myId)
       .eq("status", "active");
+
     if (memberErr) {
-      console.error("Failed to fetch calendar_members", memberErr);
-      setCalendarsList([]);
+      console.error("[fetchCalendars] calendar_members 取得失敗:", memberErr.message, memberErr.code, memberErr.details);
+      const fallback = await createDefaultCalendar();
+      if (fallback) {
+        setCalendarsList([fallback]);
+        setCurrentCalendarId(fallback.id);
+      } else {
+        setCalendarsList([]);
+      }
       return;
     }
+
     if (!memberRows?.length) {
       const created = await createDefaultCalendar();
       if (created) {
@@ -272,36 +282,60 @@ export default function Home() {
       }
       return;
     }
+
     const calendarIds = [...new Set((memberRows as { calendar_id: string }[]).map((r) => r.calendar_id))];
     const { data: calData, error: calErr } = await supabase
       .from("calendars")
       .select("id, name, created_by")
       .in("id", calendarIds);
+
     if (calErr) {
-      console.error("Failed to fetch calendars", calErr);
-      setCalendarsList([]);
+      console.error("[fetchCalendars] calendars 取得失敗:", calErr.message, calErr.code, calErr.details);
+      const fallback = await createDefaultCalendar();
+      if (fallback) {
+        setCalendarsList([fallback]);
+        setCurrentCalendarId(fallback.id);
+      } else {
+        setCalendarsList([]);
+      }
       return;
     }
+
     const list: CalendarItem[] = (calData || []).map((c: { id: string; name: string; created_by: string }) => ({
       id: c.id,
       name: c.name,
       created_by: c.created_by,
     }));
+
+    if (list.length === 0) {
+      const fallback = await createDefaultCalendar();
+      if (fallback) {
+        setCalendarsList([fallback]);
+        setCurrentCalendarId(fallback.id);
+      } else {
+        setCalendarsList([]);
+      }
+      return;
+    }
+
     setCalendarsList(list);
     setCurrentCalendarId((prev) => {
       if (prev && list.some((c) => c.id === prev)) return prev;
-      return list.length > 0 ? list[0].id : null;
+      return list[0].id;
     });
   }, [session?.user?.id, createDefaultCalendar]);
 
   useEffect(() => {
-    if (!session) {
+    if (!session?.user?.id) {
       setCalendarsLoading(false);
       return;
     }
     setCalendarsLoading(true);
-    fetchCalendars().finally(() => setCalendarsLoading(false));
-  }, [session, fetchCalendars]);
+    fetchCalendars()
+      .then(() => {})
+      .catch((err) => console.error("[fetchCalendars] 未処理エラー:", err))
+      .finally(() => setCalendarsLoading(false));
+  }, [session?.user?.id, fetchCalendars]);
 
   const fetchCalendarMembers = React.useCallback(
     async (calendarId: string | null) => {
@@ -935,15 +969,14 @@ export default function Home() {
     <div className="min-h-screen bg-background p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3 flex-wrap border-2 border-red-500 p-2" style={{ border: "2px solid red" }}>
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-bold shrink-0">カレンダーTodoリスト</h1>
-            <div className="relative z-50 flex items-center gap-2 shrink-0">
-              <span className="text-xl leading-none" aria-hidden>📅</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-lg text-muted-foreground" aria-hidden>📅</span>
               <select
                 value={currentCalendarId ?? ""}
                 onChange={(e) => setCurrentCalendarId(e.target.value || null)}
-                className="min-w-[200px] px-3 py-2 font-bold"
-                style={{ backgroundColor: "yellow" }}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium min-w-[180px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 aria-label="表示するカレンダーを選択"
               >
                 {calendarsList.length === 0 ? (
@@ -1002,27 +1035,6 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-4">
-            <div className="relative z-50 flex items-center gap-2 py-2">
-              <label htmlFor="calendar-switch-below" className="text-sm font-medium shrink-0">表示するカレンダー:</label>
-              <select
-                id="calendar-switch-below"
-                value={currentCalendarId ?? ""}
-                onChange={(e) => setCurrentCalendarId(e.target.value || null)}
-                className="min-w-[200px] px-3 py-2 font-bold"
-                style={{ backgroundColor: "yellow" }}
-                aria-label="表示するカレンダーを選択（下）"
-              >
-                {calendarsList.length === 0 ? (
-                  <option value="">カレンダーを準備中...</option>
-                ) : (
-                  calendarsList.map((cal) => (
-                    <option key={cal.id} value={cal.id}>
-                      {cal.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
             <form onSubmit={handleApply} className="flex gap-2 flex-wrap items-center">
               <Input
                 placeholder="仲間のユーザー名を入力（半角英数字・. _ -）"
