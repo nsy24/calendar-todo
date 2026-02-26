@@ -149,6 +149,13 @@ interface CalendarItem {
   created_by: string;
 }
 
+interface ReceivedInvitation {
+  id: string;
+  calendar_id: string;
+  calendar_name: string;
+  invited_by_username: string;
+}
+
 export default function Home() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -171,6 +178,7 @@ export default function Home() {
   const [newPartnerInput, setNewPartnerInput] = useState("");
   const [addPartnerLoading, setAddPartnerLoading] = useState(false);
   const [addPartnerError, setAddPartnerError] = useState<string | null>(null);
+  const [receivedInvitations, setReceivedInvitations] = useState<ReceivedInvitation[]>([]);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
@@ -404,6 +412,43 @@ export default function Home() {
     fetchCalendarMembers(currentCalendarId);
   }, [currentCalendarId, fetchCalendarMembers]);
 
+  const fetchReceivedInvitations = React.useCallback(async () => {
+    if (!session?.user?.id) return;
+    const { data: rows, error } = await supabase
+      .from("calendar_members")
+      .select("id, calendar_id, invited_by")
+      .eq("user_id", session.user.id)
+      .eq("status", "pending");
+    if (error) {
+      console.error("Failed to fetch received invitations", error);
+      setReceivedInvitations([]);
+      return;
+    }
+    if (!rows?.length) {
+      setReceivedInvitations([]);
+      return;
+    }
+    const calendarIds = [...new Set((rows as { calendar_id: string }[]).map((r) => r.calendar_id))];
+    const inviterIds = [...new Set((rows as { invited_by: string | null }[]).map((r) => r.invited_by).filter(Boolean))] as string[];
+    const [calRes, profileRes] = await Promise.all([
+      supabase.from("calendars").select("id, name").in("id", calendarIds),
+      inviterIds.length > 0 ? supabase.from("profiles").select("id, username").in("id", inviterIds) : { data: [] },
+    ]);
+    const calendarNameById = new Map((calRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
+    const usernameById = new Map((profileRes.data || []).map((p: { id: string; username: string | null }) => [p.id, p.username ?? "?"]));
+    const list: ReceivedInvitation[] = (rows as { id: string; calendar_id: string; invited_by: string | null }[]).map((r) => ({
+      id: r.id,
+      calendar_id: r.calendar_id,
+      calendar_name: calendarNameById.get(r.calendar_id) ?? "（不明）",
+      invited_by_username: usernameById.get(r.invited_by ?? "") ?? "?",
+    }));
+    setReceivedInvitations(list);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    fetchReceivedInvitations();
+  }, [fetchReceivedInvitations]);
+
   useEffect(() => {
     if (currentCalendarId) setAddPartnerError(null);
   }, [currentCalendarId]);
@@ -553,6 +598,31 @@ export default function Home() {
     };
   }, [session?.user?.id, fetchProfile]);
 
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel(`calendar_members-invites-${session.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "calendar_members",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload: { eventType: string; new: { status?: string } | null }) => {
+          fetchReceivedInvitations();
+          if (payload.eventType === "UPDATE" && payload.new?.status === "active") {
+            fetchCalendars();
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id, fetchReceivedInvitations, fetchCalendars]);
+
   const fetchTodosRef = useRef<() => Promise<void>>(async () => {});
 
   async function fetchTodos() {
@@ -660,6 +730,34 @@ export default function Home() {
     }
     addToast("申請を拒否しました");
     fetchCalendarMembers(currentCalendarId);
+  };
+
+  const handleApproveReceivedInvitation = async (invitation: ReceivedInvitation) => {
+    const { error } = await supabase
+      .from("calendar_members")
+      .update({ status: "active" })
+      .eq("id", invitation.id)
+      .eq("user_id", session!.user.id);
+    if (error) {
+      console.error("Approve invitation error", error);
+      addToast("承認に失敗しました");
+      return;
+    }
+    addToast(`${invitation.calendar_name} に参加しました`);
+    await fetchCalendars();
+    fetchReceivedInvitations();
+    setCurrentCalendarId(invitation.calendar_id);
+  };
+
+  const handleRejectReceivedInvitation = async (invitationId: string) => {
+    const { error } = await supabase.from("calendar_members").delete().eq("id", invitationId).eq("user_id", session!.user.id);
+    if (error) {
+      console.error("Reject invitation error", error);
+      addToast("拒否に失敗しました");
+      return;
+    }
+    addToast("招待を拒否しました");
+    fetchReceivedInvitations();
   };
 
   const handleUnshare = async (memberId: string) => {
@@ -1091,6 +1189,33 @@ export default function Home() {
         </div>
         {calendarsLoading && !currentCalendarId && (
           <p className="text-sm text-muted-foreground mb-4">カレンダーを準備しています...</p>
+        )}
+        {receivedInvitations.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">あなたへの招待</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ul className="space-y-2">
+                {receivedInvitations.map((inv) => (
+                  <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2">
+                    <span className="text-sm">
+                      <span className="font-medium">{inv.calendar_name}</span>
+                      <span className="text-muted-foreground"> — {inv.invited_by_username}さんから招待</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" onClick={() => handleApproveReceivedInvitation(inv)}>
+                        承認
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleRejectReceivedInvitation(inv.id)}>
+                        拒否
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         )}
         <Card className="mb-6">
           <CardHeader className="py-4">
