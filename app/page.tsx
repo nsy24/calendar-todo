@@ -286,7 +286,7 @@ export default function Home() {
         calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsLoadError(error.message || "カレンダーの取得に失敗しました");
+        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
       }
       return;
     }
@@ -312,7 +312,7 @@ export default function Home() {
         calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsLoadError("カレンダーがありません。作成に失敗しました。");
+        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
       }
       return;
     }
@@ -335,8 +335,7 @@ export default function Home() {
       .catch((err) => {
         const msg = err?.message ?? "";
         const isInfiniteRecursion = /infinite|recursion|Maximum update|Too many re-renders/i.test(msg) || (typeof msg === "string" && msg.includes("recursion"));
-        const displayMsg = err?.message === "timeout" ? "読み込みがタイムアウトしました（5秒）" : isInfiniteRecursion ? "読み込み中にエラーが発生しました" : "読み込みに失敗しました";
-        setCalendarsLoadError(displayMsg);
+        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
         if (isInfiniteRecursion && calendarsAutoRetryCountRef.current < 1) {
           calendarsAutoRetryCountRef.current += 1;
           setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 3000);
@@ -1134,7 +1133,7 @@ export default function Home() {
                 aria-label="表示するカレンダーを選択"
               >
                 {calendarsList.length === 0 ? (
-                  <option value="">{calendarsLoading ? "カレンダーを準備中..." : "カレンダーを作成してください"}</option>
+                  <option value="">{calendarsLoading ? "カレンダーを準備中..." : "ワークスペースを選択または作成"}</option>
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
@@ -1205,7 +1204,7 @@ export default function Home() {
           </div>
         )}
         {!calendarsLoading && !calendarsLoadError && calendarsList.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-4">カレンダーがありません。</p>
+          <p className="text-sm text-muted-foreground mb-4">ワークスペースがありません。</p>
         )}
         {receivedInvitations.length > 0 && (
           <Card className="mb-4">
@@ -1244,7 +1243,7 @@ export default function Home() {
           <CardContent className="pt-0 space-y-4">
             <form onSubmit={handleApply} className="flex gap-2 flex-wrap items-center">
               <Input
-                placeholder="仲間のユーザー名を入力（半角英数字・. _ -）"
+                placeholder="チームメンバーのユーザー名を入力（半角英数字・. _ -）"
                 value={newPartnerInput}
                 onChange={(e) => {
                   setNewPartnerInput(e.target.value);
@@ -1282,7 +1281,7 @@ export default function Home() {
             )}
             {activePartners.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">共有中（仲間の予定がカレンダーに表示されます）</p>
+                <p className="text-sm font-medium text-muted-foreground">プロジェクトメンバーの進捗がカレンダーに同期されます</p>
                 <ul className="space-y-1">
                   {activePartners.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
@@ -1404,7 +1403,7 @@ export default function Home() {
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="家族の予定、プロジェクト、旅行の計画など"
+                placeholder="第1プロジェクト、営業1課 共有用、クライアントA社 案件など"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
