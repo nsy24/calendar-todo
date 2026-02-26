@@ -164,6 +164,7 @@ export default function Home() {
   const [calendarsList, setCalendarsList] = useState<CalendarItem[]>([]);
   const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
   const [calendarsLoading, setCalendarsLoading] = useState(true);
+  const [calendarsLoadError, setCalendarsLoadError] = useState<string | null>(null);
   const [showCreateCalendarModal, setShowCreateCalendarModal] = useState(false);
   const [newCalendarName, setNewCalendarName] = useState("");
   const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
@@ -265,67 +266,49 @@ export default function Home() {
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
     const myId = session.user.id;
+    setCalendarsLoadError(null);
 
-    const { data: memberRows, error: memberErr } = await supabase
+    const { data: memberRows, error } = await supabase
       .from("calendar_members")
-      .select("calendar_id")
+      .select("*, calendars(id, name, created_by)")
       .eq("user_id", myId)
       .eq("status", "active");
 
-    if (memberErr) {
-      console.error("[fetchCalendars] calendar_members 取得失敗:", memberErr.message, memberErr.code, memberErr.details);
+    if (error) {
+      console.error("[fetchCalendars] 取得失敗:", error.message, error.code, error.details);
       const fallback = await createDefaultCalendar();
       if (fallback) {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
+        setCalendarsLoadError(null);
       } else {
         setCalendarsList([]);
+        setCalendarsLoadError(error.message || "カレンダーの取得に失敗しました");
       }
       return;
     }
 
-    if (!memberRows?.length) {
+    type Row = { calendar_id: string; calendars: { id: string; name: string; created_by: string } | null };
+    const rows = (memberRows || []) as Row[];
+    const seen = new Set<string>();
+    const list: CalendarItem[] = [];
+    for (const r of rows) {
+      const c = r.calendars;
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        list.push({ id: c.id, name: c.name, created_by: c.created_by });
+      }
+    }
+
+    if (list.length === 0) {
       const created = await createDefaultCalendar();
       if (created) {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
+        setCalendarsLoadError(null);
       } else {
         setCalendarsList([]);
-      }
-      return;
-    }
-
-    const calendarIds = [...new Set((memberRows as { calendar_id: string }[]).map((r) => r.calendar_id))];
-    const { data: calData, error: calErr } = await supabase
-      .from("calendars")
-      .select("id, name, created_by")
-      .in("id", calendarIds);
-
-    if (calErr) {
-      console.error("[fetchCalendars] calendars 取得失敗:", calErr.message, calErr.code, calErr.details);
-      const fallback = await createDefaultCalendar();
-      if (fallback) {
-        setCalendarsList([fallback]);
-        setCurrentCalendarId(fallback.id);
-      } else {
-        setCalendarsList([]);
-      }
-      return;
-    }
-
-    const list: CalendarItem[] = (calData || []).map((c: { id: string; name: string; created_by: string }) => ({
-      id: c.id,
-      name: c.name,
-      created_by: c.created_by,
-    }));
-
-    if (list.length === 0) {
-      const fallback = await createDefaultCalendar();
-      if (fallback) {
-        setCalendarsList([fallback]);
-        setCurrentCalendarId(fallback.id);
-      } else {
-        setCalendarsList([]);
+        setCalendarsLoadError("カレンダーがありません。作成に失敗しました。");
       }
       return;
     }
@@ -335,19 +318,27 @@ export default function Home() {
       if (prev && list.some((c) => c.id === prev)) return prev;
       return list[0].id;
     });
+    setCalendarsLoadError(null);
   }, [session?.user?.id, createDefaultCalendar]);
+
+  const runFetchCalendarsWithTimeout = React.useCallback(() => {
+    if (!session?.user?.id) return;
+    setCalendarsLoadError(null);
+    setCalendarsLoading(true);
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
+    Promise.race([fetchCalendars(), timeout]).catch((err) => {
+      setCalendarsLoadError(err?.message === "timeout" ? "読み込みがタイムアウトしました（5秒）" : "読み込みに失敗しました");
+    }).finally(() => setCalendarsLoading(false));
+  }, [session?.user?.id, fetchCalendars]);
 
   useEffect(() => {
     if (!session?.user?.id) {
       setCalendarsLoading(false);
+      setCalendarsLoadError(null);
       return;
     }
-    setCalendarsLoading(true);
-    fetchCalendars()
-      .then(() => {})
-      .catch((err) => console.error("[fetchCalendars] 未処理エラー:", err))
-      .finally(() => setCalendarsLoading(false));
-  }, [session?.user?.id, fetchCalendars]);
+    runFetchCalendarsWithTimeout();
+  }, [session?.user?.id, runFetchCalendarsWithTimeout]);
 
   const fetchCalendarMembers = React.useCallback(
     async (calendarId: string | null) => {
@@ -1187,8 +1178,19 @@ export default function Home() {
             </Button>
           </div>
         </div>
-        {calendarsLoading && !currentCalendarId && (
+        {calendarsLoading && !currentCalendarId && !calendarsLoadError && (
           <p className="text-sm text-muted-foreground mb-4">カレンダーを準備しています...</p>
+        )}
+        {calendarsLoadError && (
+          <div className="mb-4 p-3 rounded-md border border-destructive/50 bg-destructive/10">
+            <p className="text-sm text-destructive mb-2">{calendarsLoadError}</p>
+            <Button variant="outline" size="sm" onClick={() => runFetchCalendarsWithTimeout()}>
+              再試行
+            </Button>
+          </div>
+        )}
+        {!calendarsLoading && !calendarsLoadError && calendarsList.length === 0 && (
+          <p className="text-sm text-muted-foreground mb-4">カレンダーがありません。</p>
         )}
         {receivedInvitations.length > 0 && (
           <Card className="mb-4">
