@@ -245,7 +245,7 @@ export default function Home() {
     if (!session?.user?.id) return null;
     const { data: cal, error: calErr } = await supabase
       .from("calendars")
-      .insert({ name: "マイカレンダー", created_by: session.user.id })
+      .insert({ name: "マイ・ワークスペース", created_by: session.user.id })
       .select("id, name, created_by")
       .single();
     if (calErr || !cal) {
@@ -1133,7 +1133,7 @@ export default function Home() {
                 aria-label="表示するカレンダーを選択"
               >
                 {calendarsList.length === 0 ? (
-                  <option value="">{calendarsLoading ? "カレンダーを準備中..." : "ワークスペースを選択または作成"}</option>
+                  <option value="">{calendarsLoading ? "同期中..." : "ワークスペースを作成してください"}</option>
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
@@ -1152,7 +1152,7 @@ export default function Home() {
                   setShowCreateCalendarModal(true);
                 }}
                 className="shrink-0"
-                title="新しいカレンダーを作成"
+                title="ワークスペースを作成"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 新規作成
@@ -1193,7 +1193,7 @@ export default function Home() {
           </div>
         </div>
         {calendarsLoading && !currentCalendarId && !calendarsLoadError && (
-          <p className="text-sm text-muted-foreground mb-4">カレンダーを準備しています...</p>
+          <p className="text-sm text-muted-foreground mb-4">同期中...</p>
         )}
         {calendarsLoadError && (
           <div className="mb-4 p-3 rounded-md border border-destructive/50 bg-destructive/10">
@@ -1399,7 +1399,8 @@ export default function Home() {
             className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-3">新しいカレンダーを作成</h2>
+            <h2 className="text-lg font-semibold mb-1">ワークスペースを作成</h2>
+            <p className="text-sm text-muted-foreground mb-3">ビジネスチームで共有するカレンダーを作成します</p>
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
