@@ -165,6 +165,8 @@ export default function Home() {
   const [currentCalendarId, setCurrentCalendarId] = useState<string | null>(null);
   const [calendarsLoading, setCalendarsLoading] = useState(true);
   const [calendarsLoadError, setCalendarsLoadError] = useState<string | null>(null);
+  const [calendarsReconnecting, setCalendarsReconnecting] = useState(false);
+  const [calendarsEmptyPrompt, setCalendarsEmptyPrompt] = useState<string | null>(null);
   const [showCreateCalendarModal, setShowCreateCalendarModal] = useState(false);
   const [newCalendarName, setNewCalendarName] = useState("");
   const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
@@ -269,6 +271,7 @@ export default function Home() {
     if (!session?.user?.id) return;
     const myId = session.user.id;
     setCalendarsLoadError(null);
+    setCalendarsEmptyPrompt(null);
 
     const { data: memberRows, error } = await supabase
       .from("calendar_members")
@@ -283,10 +286,12 @@ export default function Home() {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
         setCalendarsLoadError(null);
+        setCalendarsReconnecting(false);
+        setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
+        setCalendarsReconnecting(true);
       }
       return;
     }
@@ -309,10 +314,12 @@ export default function Home() {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
         setCalendarsLoadError(null);
+        setCalendarsReconnecting(false);
+        setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
+        setCalendarsEmptyPrompt("最初のワークスペースを作成しましょう");
       }
       return;
     }
@@ -323,23 +330,24 @@ export default function Home() {
       return list[0].id;
     });
     setCalendarsLoadError(null);
+    setCalendarsReconnecting(false);
+    setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
   }, [session?.user?.id, createDefaultCalendar]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
     if (!session?.user?.id) return;
     setCalendarsLoadError(null);
+    setCalendarsEmptyPrompt(null);
     setCalendarsLoading(true);
     const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
     Promise.race([fetchCalendars(), timeout])
-      .catch((err) => {
-        const msg = err?.message ?? "";
-        const isInfiniteRecursion = /infinite|recursion|Maximum update|Too many re-renders/i.test(msg) || (typeof msg === "string" && msg.includes("recursion"));
-        setCalendarsLoadError("データの同期に失敗しました。再試行してください");
-        if (isInfiniteRecursion && calendarsAutoRetryCountRef.current < 1) {
-          calendarsAutoRetryCountRef.current += 1;
-          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 3000);
-        }
+      .then(() => {
+        setCalendarsReconnecting(false);
+      })
+      .catch(() => {
+        setCalendarsReconnecting(true);
+        setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
       })
       .finally(() => setCalendarsLoading(false));
   }, [session?.user?.id, fetchCalendars]);
@@ -349,6 +357,8 @@ export default function Home() {
     if (!session?.user?.id) {
       setCalendarsLoading(false);
       setCalendarsLoadError(null);
+      setCalendarsReconnecting(false);
+      setCalendarsEmptyPrompt(null);
       return;
     }
     runFetchCalendarsWithTimeout();
@@ -1192,18 +1202,21 @@ export default function Home() {
             </Button>
           </div>
         </div>
-        {calendarsLoading && !currentCalendarId && !calendarsLoadError && (
+        {calendarsLoading && !currentCalendarId && !calendarsReconnecting && (
           <p className="text-sm text-muted-foreground mb-4">同期中...</p>
         )}
-        {calendarsLoadError && (
-          <div className="mb-4 p-3 rounded-md border border-destructive/50 bg-destructive/10">
-            <p className="text-sm text-destructive mb-2">{calendarsLoadError}</p>
+        {calendarsReconnecting && (
+          <p className="text-sm text-muted-foreground mb-4">再接続中...</p>
+        )}
+        {calendarsEmptyPrompt && (
+          <div className="mb-4 p-3 rounded-md border border-border bg-muted/30">
+            <p className="text-sm text-muted-foreground mb-2">{calendarsEmptyPrompt}</p>
             <Button variant="outline" size="sm" onClick={() => runFetchCalendarsWithTimeout()}>
-              再試行
+              ワークスペースを作成
             </Button>
           </div>
         )}
-        {!calendarsLoading && !calendarsLoadError && calendarsList.length === 0 && (
+        {!calendarsLoading && !calendarsReconnecting && !calendarsEmptyPrompt && calendarsList.length === 0 && (
           <p className="text-sm text-muted-foreground mb-4">ワークスペースがありません。</p>
         )}
         {receivedInvitations.length > 0 && (
