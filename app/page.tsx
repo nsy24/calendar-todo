@@ -167,6 +167,7 @@ export default function Home() {
   const [calendarsReconnecting, setCalendarsReconnecting] = useState(false);
   const [calendarsEmptyPrompt, setCalendarsEmptyPrompt] = useState<string | null>(null);
   const [calendarsAutoCreating, setCalendarsAutoCreating] = useState(false);
+  const [calendarsLoadFailed, setCalendarsLoadFailed] = useState(false);
   const [showCreateCalendarModal, setShowCreateCalendarModal] = useState(false);
   const [newCalendarName, setNewCalendarName] = useState("");
   const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
@@ -192,6 +193,7 @@ export default function Home() {
   const activePartnerUsernamesRef = useRef<string[]>([]);
   const sessionRef = useRef(session);
   const calendarsAutoRetryCountRef = useRef(0);
+  const calendarsRetryCountRef = useRef(0);
   const calendarsAutoCreateAttemptedRef = useRef(false);
   const infiniteRecursionMessageShownRef = useRef(false);
   const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
@@ -304,11 +306,20 @@ export default function Home() {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
         setCalendarsReconnecting(false);
+        setCalendarsLoadFailed(false);
         setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
+        calendarsRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsReconnecting(true);
+        if (calendarsRetryCountRef.current >= 1) {
+          setCalendarsLoadFailed(true);
+          setCalendarsReconnecting(false);
+        } else {
+          calendarsRetryCountRef.current += 1;
+          setCalendarsReconnecting(true);
+          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+        }
       }
       return;
     }
@@ -331,24 +342,35 @@ export default function Home() {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
         setCalendarsReconnecting(false);
+        setCalendarsLoadFailed(false);
         setCalendarsEmptyPrompt(null);
         calendarsAutoRetryCountRef.current = 0;
+        calendarsRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        setCalendarsReconnecting(true);
-        setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+        if (calendarsRetryCountRef.current >= 1) {
+          setCalendarsLoadFailed(true);
+          setCalendarsReconnecting(false);
+        } else {
+          calendarsRetryCountRef.current += 1;
+          setCalendarsReconnecting(true);
+          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+        }
       }
       return;
     }
 
+    const defaultCalendarId = list.find((c) => c.name === "マイカレンダー（個人用）")?.id ?? list[0]?.id;
     setCalendarsList(list);
     setCurrentCalendarId((prev) => {
       if (prev && list.some((c) => c.id === prev)) return prev;
-      return list[0].id;
+      return defaultCalendarId ?? null;
     });
     setCalendarsReconnecting(false);
+    setCalendarsLoadFailed(false);
     setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
+    calendarsRetryCountRef.current = 0;
   }, [session?.user?.id, createDefaultCalendar, isInfiniteRecursionError, showReloadMessageOnce]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
@@ -361,8 +383,14 @@ export default function Home() {
         setCalendarsReconnecting(false);
       })
       .catch(() => {
-        setCalendarsReconnecting(true);
-        setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+        if (calendarsRetryCountRef.current >= 1) {
+          setCalendarsLoadFailed(true);
+          setCalendarsReconnecting(false);
+        } else {
+          calendarsRetryCountRef.current += 1;
+          setCalendarsReconnecting(true);
+          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+        }
       })
       .finally(() => setCalendarsLoading(false));
   }, [session?.user?.id, fetchCalendars]);
@@ -372,11 +400,15 @@ export default function Home() {
     if (!session?.user?.id) {
       setCalendarsLoading(false);
       setCalendarsReconnecting(false);
+      setCalendarsLoadFailed(false);
       setCalendarsEmptyPrompt(null);
       setCalendarsAutoCreating(false);
       calendarsAutoCreateAttemptedRef.current = false;
+      calendarsRetryCountRef.current = 0;
       return;
     }
+    setCalendarsLoadFailed(false);
+    calendarsRetryCountRef.current = 0;
     runFetchCalendarsWithTimeout();
   }, [session?.user?.id, runFetchCalendarsWithTimeout]);
 
@@ -402,9 +434,15 @@ export default function Home() {
           setCalendarsEmptyPrompt(null);
           calendarsAutoRetryCountRef.current = 0;
         } else {
-          calendarsAutoCreateAttemptedRef.current = false;
-          setCalendarsReconnecting(true);
-          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+          if (calendarsRetryCountRef.current >= 1) {
+            setCalendarsLoadFailed(true);
+            setCalendarsReconnecting(false);
+          } else {
+            calendarsAutoCreateAttemptedRef.current = false;
+            calendarsRetryCountRef.current += 1;
+            setCalendarsReconnecting(true);
+            setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
+          }
         }
       })
       .finally(() => setCalendarsAutoCreating(false));
@@ -1251,19 +1289,27 @@ export default function Home() {
             </Button>
           </div>
         </div>
-        {calendarsLoading && !currentCalendarId && !calendarsReconnecting && (
+        {calendarsLoadFailed && (
+          <div className="mb-6 p-6 rounded-lg border border-border bg-muted/30 text-center">
+            <p className="text-sm text-muted-foreground mb-3">読み込みに失敗しました。ページをリロードしてください。</p>
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              リロード
+            </Button>
+          </div>
+        )}
+        {!calendarsLoadFailed && calendarsLoading && !currentCalendarId && !calendarsReconnecting && (
           <p className="text-sm text-muted-foreground mb-4">同期中...</p>
         )}
-        {calendarsReconnecting && (
+        {!calendarsLoadFailed && calendarsReconnecting && (
           <p className="text-sm text-muted-foreground mb-4">再接続中...</p>
         )}
-        {calendarsAutoCreating && (
+        {!calendarsLoadFailed && calendarsAutoCreating && (
           <p className="text-sm text-muted-foreground mb-4">初期設定を行っています...</p>
         )}
-        {!calendarsLoading && !calendarsReconnecting && !calendarsAutoCreating && calendarsList.length === 0 && (
+        {!calendarsLoadFailed && !calendarsLoading && !calendarsReconnecting && !calendarsAutoCreating && calendarsList.length === 0 && (
           <p className="text-sm text-muted-foreground mb-4">ワークスペースを同期中、または未作成です。</p>
         )}
-        {receivedInvitations.length > 0 && (
+        {!calendarsLoadFailed && receivedInvitations.length > 0 && (
           <Card className="mb-4">
             <CardHeader className="py-3">
               <CardTitle className="text-base">あなたへの招待</CardTitle>
@@ -1290,6 +1336,8 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
+        {!calendarsLoadFailed && (
+          <>
         <Card className="mb-6">
           <CardHeader className="py-4">
             <CardTitle className="text-base flex items-center gap-2">
@@ -1446,6 +1494,8 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
+          </>
+        )}
       </div>
       {showCreateCalendarModal && (
         <div
