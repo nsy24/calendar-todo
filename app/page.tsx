@@ -1957,7 +1957,7 @@ export default function Home() {
                 </table>
               )}
               {reminderTodos.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドは1作業1行で表示しています。削除するとその作業のリマインドがすべて削除されます</p>
+                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます</p>
               )}
             </div>
           </div>
