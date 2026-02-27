@@ -198,6 +198,8 @@ export default function Home() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
+  const notifiedReminderRef = useRef<Set<string>>(new Set());
+  const todosRef = useRef<Todo[]>([]);
   const profileRef = useRef(profile);
   const activePartnerUsernamesRef = useRef<string[]>([]);
   const sessionRef = useRef(session);
@@ -205,6 +207,7 @@ export default function Home() {
   const calendarsRetryCountRef = useRef(0);
   const calendarsAutoCreateAttemptedRef = useRef(false);
   const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
+  todosRef.current = todos;
   profileRef.current = profile;
   activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
   sessionRef.current = session;
@@ -488,7 +491,10 @@ export default function Home() {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().then((p) => setNotificationPermission(p));
     }
-    const t = setInterval(() => checkAndNotifyOverdue(), 60_000);
+    const t = setInterval(() => {
+      checkAndNotifyOverdue();
+      checkAndNotifyReminders();
+    }, 60_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
@@ -810,6 +816,30 @@ export default function Home() {
     });
   }
 
+  function checkAndNotifyReminders() {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const now = new Date();
+    todosRef.current.forEach((t) => {
+      if (t.completed) return;
+      const hasTime = t.reminderTime != null && t.reminderTime !== "";
+      const hasDate = t.reminderDate != null && t.reminderDate !== "";
+      if (!hasTime && !hasDate) return;
+      let notifyAt: Date;
+      if (hasTime) {
+        const [h, m] = t.reminderTime!.split(":").map(Number);
+        const d = t.date;
+        notifyAt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m ?? 0, 0);
+      } else {
+        notifyAt = new Date(t.reminderDate! + "T09:00:00");
+      }
+      const key = `${t.id}-${format(notifyAt, "yyyy-MM-dd")}`;
+      if (now >= notifyAt && !notifiedReminderRef.current.has(key)) {
+        new Notification("リマインド: " + t.text, { body: format(notifyAt, "M月d日 H:mm") + " のタスク" });
+        notifiedReminderRef.current.add(key);
+      }
+    });
+  }
+
   const selectedDateTodos = useMemo(() => {
     const list = todos.filter((t) => isSameDay(t.date, selectedDate));
     return [...list].sort(
@@ -989,7 +1019,8 @@ export default function Home() {
 
     if (newCompleted && target.isMonthlyRecurring && currentCalendarId && session?.user?.id) {
       const nextMonthDate = addMonths(target.date, 1);
-      const nextDateStr = format(nextMonthDate, "yyyy-MM-dd");
+      const isLastDay = isSameDay(target.date, endOfMonth(target.date));
+      const nextDateStr = format(isLastDay ? endOfMonth(nextMonthDate) : nextMonthDate, "yyyy-MM-dd");
       const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
       await supabase.from("todos").insert([
         {
@@ -1065,25 +1096,46 @@ export default function Home() {
       return;
     }
     setReminderSubmitting(true);
-    const taskDate = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
-    const payload: Record<string, unknown> = {
-      title,
-      date: taskDate,
-      calendar_id: currentCalendarId,
-      user_id: session.user.id,
-      created_by_username: profile?.username?.trim() ?? "",
-      priority: newTodoPriority,
-      position: 0,
-      is_monthly_recurring: reminderMonthly,
-    };
-    if (reminderMode === "time") {
-      payload.reminder_time = `${reminderTime}:00`;
-      payload.reminder_date = null;
+    const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
+    const baseDate = new Date(taskDateStr + "T12:00:00");
+    const isLastDayOfMonth = isSameDay(baseDate, endOfMonth(baseDate));
+    const reminderTimeVal = reminderMode === "time" ? `${reminderTime}:00` : null;
+    const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : null;
+
+    const rowsToInsert: Record<string, unknown>[] = [];
+    if (reminderMonthly) {
+      for (let i = 0; i < 3; i++) {
+        const d = addMonths(baseDate, i);
+        const dateStr = format(isLastDayOfMonth ? endOfMonth(d) : d, "yyyy-MM-dd");
+        rowsToInsert.push({
+          title,
+          date: dateStr,
+          calendar_id: currentCalendarId,
+          user_id: session.user.id,
+          created_by_username: profile?.username?.trim() ?? "",
+          priority: newTodoPriority,
+          position: 0,
+          is_monthly_recurring: true,
+          reminder_time: reminderTimeVal,
+          reminder_date: reminderDateVal ?? dateStr,
+        });
+      }
     } else {
-      payload.reminder_time = null;
-      payload.reminder_date = reminderDate || taskDate;
+      rowsToInsert.push({
+        title,
+        date: taskDateStr,
+        calendar_id: currentCalendarId,
+        user_id: session.user.id,
+        created_by_username: profile?.username?.trim() ?? "",
+        priority: newTodoPriority,
+        position: 0,
+        is_monthly_recurring: false,
+        reminder_time: reminderTimeVal,
+        reminder_date: reminderDateVal ?? taskDateStr,
+      });
     }
-    const { error } = await supabase.from("todos").insert([payload]).select();
+
+    const { error } = await supabase.from("todos").insert(rowsToInsert).select();
     setReminderSubmitting(false);
     if (error) {
       console.error("Reminder todo insert error", error);
@@ -1092,7 +1144,7 @@ export default function Home() {
     }
     setShowReminderModal(false);
     fetchTodos();
-    addToast("リマインドを設定しました");
+    addToast(reminderMonthly ? "リマインドを設定しました（向こう3ヶ月分）" : "リマインドを設定しました");
   };
 
   const setReminderDateToFirst = () => {
