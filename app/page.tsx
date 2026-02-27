@@ -853,11 +853,23 @@ export default function Home() {
   }, [todos, selectedDate]);
 
   const reminderTodos = useMemo(() => {
-    return todos.filter(
-      (t) =>
-        (t.reminderTime != null && t.reminderTime !== "") ||
-        (t.reminderDate != null && t.reminderDate !== "") ||
-        t.isMonthlyRecurring
+    const hasReminder = (t: Todo) =>
+      (t.reminderTime != null && t.reminderTime !== "") ||
+      (t.reminderDate != null && t.reminderDate !== "") ||
+      t.isMonthlyRecurring;
+    const withReminder = todos.filter(hasReminder);
+    const monthlyByTitle = new Map<string, Todo>();
+    const nonMonthly: Todo[] = [];
+    for (const t of withReminder) {
+      if (t.isMonthlyRecurring) {
+        const existing = monthlyByTitle.get(t.text);
+        if (!existing || t.date >= existing.date) monthlyByTitle.set(t.text, t);
+      } else {
+        nonMonthly.push(t);
+      }
+    }
+    return [...Array.from(monthlyByTitle.values()), ...nonMonthly].sort(
+      (a, b) => a.text.localeCompare(b.text) || new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   }, [todos]);
 
@@ -1217,14 +1229,12 @@ export default function Home() {
     } else {
       const todo = todos.find((t) => t.id === target!.id);
       if (!todo) return;
-      const dateStr = format(todo.date, "yyyy-MM-dd");
       const { data: rows } = await supabase
         .from("todos")
         .select("id")
         .eq("calendar_id", currentCalendarId)
         .eq("title", todo.text)
-        .eq("is_monthly_recurring", true)
-        .gte("date", dateStr);
+        .eq("is_monthly_recurring", true);
       const ids = (rows || []).map((r: { id: string }) => r.id);
       if (ids.length === 0) return;
       const { error } = await supabase.from("todos").delete().in("id", ids);
@@ -1233,7 +1243,7 @@ export default function Home() {
         addToast("一括削除に失敗しました");
         return;
       }
-      addToast(`今後の繰り返しを${ids.length}件削除しました`);
+      addToast(`この作業のリマインドを${ids.length}件削除しました`);
     }
     fetchTodos();
   };
@@ -1684,7 +1694,7 @@ export default function Home() {
           >
             <h2 className="text-lg font-semibold text-foreground mb-1">リマインド設定</h2>
             <p className="text-sm text-muted-foreground mb-4">作業名とリマインド方法を指定してください。</p>
-            <p className="text-xs text-muted-foreground mb-4">※ 毎月リマインドは、タスクを完了すると翌月分が自動で作成されます</p>
+            <p className="text-xs text-muted-foreground mb-4">※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます</p>
             <form onSubmit={handleSubmitReminder} className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">作業名</label>
@@ -1901,11 +1911,8 @@ export default function Home() {
                         <td className="py-2 px-3 text-right">
                           {reminderDeleteConfirm?.id === t.id ? (
                             <div className="flex flex-wrap justify-end gap-1">
-                              <Button size="sm" variant="outline" onClick={() => handleReminderDelete("single")}>
-                                この1件だけ
-                              </Button>
                               <Button size="sm" variant="destructive" onClick={() => handleReminderDelete("all")}>
-                                今後のすべて
+                                削除
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => setReminderDeleteConfirm(null)}>
                                 キャンセル
@@ -1950,7 +1957,7 @@ export default function Home() {
                 </table>
               )}
               {reminderTodos.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドの重複は、行の「削除」→「今後のすべて」で一括削除できます</p>
+                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドは1作業1行で表示しています。削除するとその作業のリマインドがすべて削除されます</p>
               )}
             </div>
           </div>
