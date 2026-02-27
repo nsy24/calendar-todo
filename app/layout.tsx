@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "カレンダーTodoリスト",
-  description: "ユーザー名で共有できるカレンダー形式のTodoリスト",
+  description: "第1プロジェクト・チーム共有向けのカレンダー形式Todoリスト",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, title: "Todoカレンダー" },
 };

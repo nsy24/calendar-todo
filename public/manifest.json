@@ -1,7 +1,7 @@
 {
   "name": "カレンダーTodoリスト",
   "short_name": "Todoカレンダー",
-  "description": "ユーザー名で共有できるカレンダー形式のTodoリスト",
+  "description": "第1プロジェクト・チーム共有向けのカレンダー形式Todoリスト",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

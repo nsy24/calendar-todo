@@ -195,7 +195,6 @@ export default function Home() {
   const calendarsAutoRetryCountRef = useRef(0);
   const calendarsRetryCountRef = useRef(0);
   const calendarsAutoCreateAttemptedRef = useRef(false);
-  const infiniteRecursionMessageShownRef = useRef(false);
   const runFetchCalendarsWithTimeoutRef = useRef<() => void>(() => {});
   profileRef.current = profile;
   activePartnerUsernamesRef.current = activePartners.map((p) => p.partner_username);
@@ -216,11 +215,9 @@ export default function Home() {
     return msg.includes("infinite recursion") || code.includes("infinite recursion");
   }, []);
 
-  const showReloadMessageOnce = React.useCallback(() => {
-    if (infiniteRecursionMessageShownRef.current) return;
-    infiniteRecursionMessageShownRef.current = true;
-    addToast("データベースのキャッシュが古い可能性があります。ページをリロードしてください。");
-  }, [addToast]);
+  const handleInfiniteRecursion = React.useCallback(() => {
+    window.location.reload();
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -269,7 +266,7 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("[createDefaultCalendar] calendars 作成失敗:", calErr?.message, calErr?.code, calErr?.details);
-      if (calErr && isInfiniteRecursionError(calErr)) showReloadMessageOnce();
+      if (calErr && isInfiniteRecursionError(calErr)) handleInfiniteRecursion();
       return null;
     }
     // calendar_members は RLS 自己完結のため、user_id のみ指定した単純な insert
@@ -281,11 +278,11 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("[createDefaultCalendar] calendar_members 登録失敗:", memberErr.message, memberErr.code, memberErr.details);
-      if (isInfiniteRecursionError(memberErr)) showReloadMessageOnce();
+      if (isInfiniteRecursionError(memberErr)) handleInfiniteRecursion();
       return null;
     }
     return { id: cal.id, name: cal.name, created_by: cal.created_by };
-  }, [session?.user?.id, isInfiniteRecursionError, showReloadMessageOnce]);
+  }, [session?.user?.id, isInfiniteRecursionError, handleInfiniteRecursion]);
 
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
@@ -300,7 +297,7 @@ export default function Home() {
 
     if (error) {
       console.error("[fetchCalendars] 取得失敗:", error.message, error.code, error.details);
-      if (isInfiniteRecursionError(error)) showReloadMessageOnce();
+      if (isInfiniteRecursionError(error)) handleInfiniteRecursion();
       const fallback = await createDefaultCalendar();
       if (fallback) {
         setCalendarsList([fallback]);
@@ -337,6 +334,7 @@ export default function Home() {
     }
 
     if (list.length === 0) {
+      calendarsAutoCreateAttemptedRef.current = true;
       const created = await createDefaultCalendar();
       if (created) {
         setCalendarsList([created]);
@@ -371,7 +369,7 @@ export default function Home() {
     setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
     calendarsRetryCountRef.current = 0;
-  }, [session?.user?.id, createDefaultCalendar, isInfiniteRecursionError, showReloadMessageOnce]);
+  }, [session?.user?.id, createDefaultCalendar, isInfiniteRecursionError, handleInfiniteRecursion]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
     if (!session?.user?.id) return;
@@ -1173,7 +1171,7 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("Failed to create calendar", calErr);
-      if (calErr && isInfiniteRecursionError(calErr)) showReloadMessageOnce();
+      if (calErr && isInfiniteRecursionError(calErr)) handleInfiniteRecursion();
       setCreateCalendarError(calErr?.message ?? "カレンダーの作成に失敗しました");
       setCreateCalendarLoading(false);
       return;
@@ -1187,7 +1185,7 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("Failed to add owner to new calendar", memberErr);
-      if (isInfiniteRecursionError(memberErr)) showReloadMessageOnce();
+      if (isInfiniteRecursionError(memberErr)) handleInfiniteRecursion();
       setCreateCalendarError("カレンダーの設定に失敗しました");
       setCreateCalendarLoading(false);
       return;
@@ -1511,7 +1509,7 @@ export default function Home() {
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="第1プロジェクト、営業1課 共有用 など"
+                placeholder="第1プロジェクト、チーム共有 など"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);

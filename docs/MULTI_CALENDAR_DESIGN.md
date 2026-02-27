@@ -25,7 +25,7 @@
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | `id` | uuid PK | カレンダーID |
-| `name` | text NOT NULL | 表示名（例: 「プロジェクトA」「家族」） |
+| `name` | text NOT NULL | 表示名（例: 「第1プロジェクト」「チーム共有」） |
 | `created_by` | uuid NOT NULL → auth.users(id) | 作成者（オーナー） |
 | `created_at` | timestamptz | 作成日時 |
 
