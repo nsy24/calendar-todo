@@ -1,7 +1,7 @@
 -- ============================================
--- Supabase Auth と 私/弟 区別用のテーブル変更
+-- Supabase Auth と プロフィール・チーム用のテーブル変更
 -- ============================================
--- 1. プロフィールテーブル（誰が「私」で誰が「弟」かを管理）
+-- 1. プロフィールテーブル（ユーザー識別・チーム用）
 -- 2. todos に user_id と created_by_role を追加
 -- 3. RLS で「カレンダーは共有」「自分のは編集可」に
 
@@ -13,7 +13,7 @@ ALTER TABLE todos
 -- 既存行は created_by_role を 'me' にしておく（後で Supabase ダッシュボードで手動設定しても可）
 -- UPDATE todos SET created_by_role = 'me' WHERE created_by_role IS NULL;
 
--- プロフィール: Auth のユーザーと「私」「弟」の対応
+-- プロフィール: Auth のユーザーと表示名の対応
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role text NOT NULL CHECK (role IN ('me', 'sibling')),
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- ここでは手動で2人分を入れる前提。Supabase Dashboard > Authentication > Users でユーザー作成後、
 -- SQL Editor で以下を実行:
 --   INSERT INTO profiles (id, role) VALUES ('あなたのuser_idのuuid', 'me');
---   INSERT INTO profiles (id, role) VALUES ('弟のuser_idのuuid', 'sibling');
+--   INSERT INTO profiles (id, role) VALUES ('メンバーのuser_idのuuid', 'sibling');
 
 -- RLS 有効化
 ALTER TABLE todos ENABLE ROW LEVEL SECURITY;

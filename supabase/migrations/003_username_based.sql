@@ -1,4 +1,4 @@
--- 私/弟(role) をやめ、username ベースに統一するための変更
+-- role をやめ、username ベースに統一するための変更（第1プロジェクト・チーム共有向け）
 
 -- profiles.role を任意に（新規ユーザーは username のみで登録可能に）
 ALTER TABLE profiles
