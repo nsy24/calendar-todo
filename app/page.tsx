@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -181,6 +181,10 @@ export default function Home() {
   const [reminderDate, setReminderDate] = useState("");
   const [reminderMonthly, setReminderMonthly] = useState(false);
   const [reminderSubmitting, setReminderSubmitting] = useState(false);
+  const [showReminderListModal, setShowReminderListModal] = useState(false);
+  const [reminderEditId, setReminderEditId] = useState<string | null>(null);
+  const [reminderEditTitle, setReminderEditTitle] = useState("");
+  const [reminderDeleteConfirm, setReminderDeleteConfirm] = useState<{ id: string; title: string; isMonthly: boolean } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
@@ -847,6 +851,15 @@ export default function Home() {
     );
   }, [todos, selectedDate]);
 
+  const reminderTodos = useMemo(() => {
+    return todos.filter(
+      (t) =>
+        (t.reminderTime != null && t.reminderTime !== "") ||
+        (t.reminderDate != null && t.reminderDate !== "") ||
+        t.isMonthlyRecurring
+    );
+  }, [todos]);
+
   const todosByDate = useMemo(() => {
     const map = new Map<string, number>();
     todos.forEach((todo) => {
@@ -1154,6 +1167,60 @@ export default function Home() {
     setReminderDate(format(endOfMonth(selectedDate), "yyyy-MM-dd"));
   };
 
+  const handleReminderEditSave = async () => {
+    if (!reminderEditId || !reminderEditTitle.trim()) {
+      setReminderEditId(null);
+      return;
+    }
+    const { error } = await supabase.from("todos").update({ title: reminderEditTitle.trim() }).eq("id", reminderEditId);
+    if (error) {
+      console.error("Reminder title update error", error);
+      addToast("名前の変更に失敗しました");
+      return;
+    }
+    setReminderEditId(null);
+    setReminderEditTitle("");
+    fetchTodos();
+    addToast("名前を変更しました");
+  };
+
+  const handleReminderDelete = async (mode: "single" | "all", optionalId?: string) => {
+    const target = reminderDeleteConfirm;
+    const idToDelete = optionalId ?? target?.id;
+    if (!idToDelete || !currentCalendarId) return;
+    setReminderDeleteConfirm(null);
+    if (mode === "single") {
+      const { error } = await supabase.from("todos").delete().eq("id", idToDelete);
+      if (error) {
+        console.error("Delete todo error", error);
+        addToast("削除に失敗しました");
+        return;
+      }
+      addToast("1件削除しました");
+    } else {
+      const todo = todos.find((t) => t.id === target!.id);
+      if (!todo) return;
+      const dateStr = format(todo.date, "yyyy-MM-dd");
+      const { data: rows } = await supabase
+        .from("todos")
+        .select("id")
+        .eq("calendar_id", currentCalendarId)
+        .eq("title", todo.text)
+        .eq("is_monthly_recurring", true)
+        .gte("date", dateStr);
+      const ids = (rows || []).map((r: { id: string }) => r.id);
+      if (ids.length === 0) return;
+      const { error } = await supabase.from("todos").delete().in("id", ids);
+      if (error) {
+        console.error("Bulk delete error", error);
+        addToast("一括削除に失敗しました");
+        return;
+      }
+      addToast(`今後の繰り返しを${ids.length}件削除しました`);
+    }
+    fetchTodos();
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -1327,6 +1394,10 @@ export default function Home() {
             </div>
             <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
               アバターをランダム生成
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowReminderListModal(true)} title="リマインド一覧">
+              <List className="h-4 w-4 mr-1" />
+              リマインド一覧
             </Button>
             {typeof window !== "undefined" && "Notification" in window && notificationPermission === "default" && (
               <Button
@@ -1694,6 +1765,123 @@ export default function Home() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showReminderListModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => {
+            if (!reminderEditId && !reminderDeleteConfirm) setShowReminderListModal(false);
+          }}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">リマインド一覧</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowReminderListModal(false)} aria-label="閉じる">
+                ×
+              </Button>
+            </div>
+            <div className="p-4 overflow-auto">
+              {reminderTodos.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">リマインド設定付きのTodoはありません。</p>
+              ) : (
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-3 font-medium text-foreground">作業名</th>
+                      <th className="text-left py-2 px-3 font-medium text-foreground">リマインド日時</th>
+                      <th className="text-left py-2 px-3 font-medium text-foreground w-20">毎月</th>
+                      <th className="text-right py-2 px-3 font-medium text-foreground w-36">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reminderTodos.map((t) => (
+                      <tr key={t.id} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-2 px-3">
+                          {reminderEditId === t.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={reminderEditTitle}
+                                onChange={(e) => setReminderEditTitle(e.target.value)}
+                                className="flex-1 min-w-0"
+                                autoFocus
+                                onKeyDown={(e) => e.key === "Enter" && handleReminderEditSave()}
+                              />
+                              <Button size="sm" onClick={handleReminderEditSave}>
+                                保存
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setReminderEditId(null)}>
+                                キャンセル
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="font-medium">{t.text}</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {t.reminderTime != null && t.reminderTime !== ""
+                            ? `${format(t.date, "yyyy/MM/dd")} ${t.reminderTime}`
+                            : t.reminderDate != null && t.reminderDate !== ""
+                              ? format(new Date(t.reminderDate + "T12:00:00"), "yyyy/MM/dd")
+                              : format(t.date, "yyyy/MM/dd")}
+                        </td>
+                        <td className="py-2 px-3">{t.isMonthlyRecurring ? "する" : "—"}</td>
+                        <td className="py-2 px-3 text-right">
+                          {reminderDeleteConfirm?.id === t.id ? (
+                            <div className="flex flex-wrap justify-end gap-1">
+                              <Button size="sm" variant="outline" onClick={() => handleReminderDelete("single")}>
+                                この1件だけ
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleReminderDelete("all")}>
+                                今後のすべて
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setReminderDeleteConfirm(null)}>
+                                キャンセル
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-1">
+                              {reminderEditId !== t.id && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setReminderEditId(t.id);
+                                      setReminderEditTitle(t.text);
+                                    }}
+                                    title="名前変更"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() =>
+                                      t.isMonthlyRecurring
+                                        ? setReminderDeleteConfirm({ id: t.id, title: t.text, isMonthly: true })
+                                        : handleReminderDelete("single", t.id)
+                                    }
+                                    title="削除"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       )}
