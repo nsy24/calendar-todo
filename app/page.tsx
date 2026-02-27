@@ -1135,22 +1135,19 @@ export default function Home() {
     if (reminderMonthly) {
       const firstDate = getNextOccurrenceOfDay(reminderDayOfMonth, now);
       const isLastDayOfMonth = reminderDayOfMonth <= 0 || firstDate.getDate() === endOfMonth(firstDate).getDate();
-      for (let i = 0; i < 3; i++) {
-        const d = addMonths(firstDate, i);
-        const dateStr = format(isLastDayOfMonth ? endOfMonth(d) : d, "yyyy-MM-dd");
-        rowsToInsert.push({
-          title,
-          date: dateStr,
-          calendar_id: currentCalendarId,
-          user_id: session.user.id,
-          created_by_username: profile?.username?.trim() ?? "",
-          priority: newTodoPriority,
-          position: 0,
-          is_monthly_recurring: true,
-          reminder_time: reminderTimeVal,
-          reminder_date: dateStr,
-        });
-      }
+      const dateStr = format(isLastDayOfMonth ? endOfMonth(firstDate) : firstDate, "yyyy-MM-dd");
+      rowsToInsert.push({
+        title,
+        date: dateStr,
+        calendar_id: currentCalendarId,
+        user_id: session.user.id,
+        created_by_username: profile?.username?.trim() ?? "",
+        priority: newTodoPriority,
+        position: 0,
+        is_monthly_recurring: true,
+        reminder_time: reminderTimeVal,
+        reminder_date: dateStr,
+      });
     } else {
       const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
       const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : taskDateStr;
@@ -1177,7 +1174,7 @@ export default function Home() {
     }
     setShowReminderModal(false);
     fetchTodos();
-    addToast(reminderMonthly ? "リマインドを設定しました（向こう3ヶ月分）" : "リマインドを設定しました");
+    addToast("リマインドを設定しました");
   };
 
   const setReminderDateToFirst = () => {
@@ -1687,6 +1684,7 @@ export default function Home() {
           >
             <h2 className="text-lg font-semibold text-foreground mb-1">リマインド設定</h2>
             <p className="text-sm text-muted-foreground mb-4">作業名とリマインド方法を指定してください。</p>
+            <p className="text-xs text-muted-foreground mb-4">※ 毎月リマインドは、タスクを完了すると翌月分が自動で作成されます</p>
             <form onSubmit={handleSubmitReminder} className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">作業名</label>
@@ -1950,6 +1948,9 @@ export default function Home() {
                     ))}
                   </tbody>
                 </table>
+              )}
+              {reminderTodos.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドの重複は、行の「削除」→「今後のすべて」で一括削除できます</p>
               )}
             </div>
           </div>
