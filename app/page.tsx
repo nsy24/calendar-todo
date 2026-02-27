@@ -208,17 +208,6 @@ export default function Home() {
     }, 5000);
   }, []);
 
-  const isInfiniteRecursionError = React.useCallback((err: { message?: string; code?: string } | null) => {
-    if (!err) return false;
-    const msg = (err.message ?? "").toLowerCase();
-    const code = (err.code ?? "").toLowerCase();
-    return msg.includes("infinite recursion") || code.includes("infinite recursion");
-  }, []);
-
-  const handleInfiniteRecursion = React.useCallback(() => {
-    window.location.reload();
-  }, []);
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s as { user: { id: string } } | null);
@@ -266,7 +255,6 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("[createDefaultCalendar] calendars 作成失敗:", calErr?.message, calErr?.code, calErr?.details);
-      if (calErr && isInfiniteRecursionError(calErr)) handleInfiniteRecursion();
       return null;
     }
     // calendar_members は RLS 自己完結のため、user_id のみ指定した単純な insert
@@ -278,11 +266,10 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("[createDefaultCalendar] calendar_members 登録失敗:", memberErr.message, memberErr.code, memberErr.details);
-      if (isInfiniteRecursionError(memberErr)) handleInfiniteRecursion();
       return null;
     }
     return { id: cal.id, name: cal.name, created_by: cal.created_by };
-  }, [session?.user?.id, isInfiniteRecursionError, handleInfiniteRecursion]);
+  }, [session?.user?.id]);
 
   const fetchCalendars = React.useCallback(async () => {
     if (!session?.user?.id) return;
@@ -297,8 +284,9 @@ export default function Home() {
 
     if (error) {
       console.error("[fetchCalendars] 取得失敗:", error.message, error.code, error.details);
-      if (isInfiniteRecursionError(error)) handleInfiniteRecursion();
+      setCalendarsAutoCreating(true);
       const fallback = await createDefaultCalendar();
+      setCalendarsAutoCreating(false);
       if (fallback) {
         setCalendarsList([fallback]);
         setCurrentCalendarId(fallback.id);
@@ -309,14 +297,8 @@ export default function Home() {
         calendarsRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        if (calendarsRetryCountRef.current >= 1) {
-          setCalendarsLoadFailed(true);
-          setCalendarsReconnecting(false);
-        } else {
-          calendarsRetryCountRef.current += 1;
-          setCalendarsReconnecting(true);
-          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
-        }
+        setCalendarsLoadFailed(true);
+        setCalendarsReconnecting(false);
       }
       return;
     }
@@ -334,8 +316,9 @@ export default function Home() {
     }
 
     if (list.length === 0) {
-      calendarsAutoCreateAttemptedRef.current = true;
+      setCalendarsAutoCreating(true);
       const created = await createDefaultCalendar();
+      setCalendarsAutoCreating(false);
       if (created) {
         setCalendarsList([created]);
         setCurrentCalendarId(created.id);
@@ -346,14 +329,8 @@ export default function Home() {
         calendarsRetryCountRef.current = 0;
       } else {
         setCalendarsList([]);
-        if (calendarsRetryCountRef.current >= 1) {
-          setCalendarsLoadFailed(true);
-          setCalendarsReconnecting(false);
-        } else {
-          calendarsRetryCountRef.current += 1;
-          setCalendarsReconnecting(true);
-          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
-        }
+        setCalendarsLoadFailed(true);
+        setCalendarsReconnecting(false);
       }
       return;
     }
@@ -369,26 +346,18 @@ export default function Home() {
     setCalendarsEmptyPrompt(null);
     calendarsAutoRetryCountRef.current = 0;
     calendarsRetryCountRef.current = 0;
-  }, [session?.user?.id, createDefaultCalendar, isInfiniteRecursionError, handleInfiniteRecursion]);
+  }, [session?.user?.id, createDefaultCalendar]);
 
   const runFetchCalendarsWithTimeout = React.useCallback(() => {
     if (!session?.user?.id) return;
     setCalendarsEmptyPrompt(null);
     setCalendarsLoading(true);
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000));
     Promise.race([fetchCalendars(), timeout])
-      .then(() => {
-        setCalendarsReconnecting(false);
-      })
+      .then(() => setCalendarsReconnecting(false))
       .catch(() => {
-        if (calendarsRetryCountRef.current >= 1) {
-          setCalendarsLoadFailed(true);
-          setCalendarsReconnecting(false);
-        } else {
-          calendarsRetryCountRef.current += 1;
-          setCalendarsReconnecting(true);
-          setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
-        }
+        setCalendarsLoadFailed(true);
+        setCalendarsReconnecting(false);
       })
       .finally(() => setCalendarsLoading(false));
   }, [session?.user?.id, fetchCalendars]);
@@ -409,42 +378,6 @@ export default function Home() {
     calendarsRetryCountRef.current = 0;
     runFetchCalendarsWithTimeout();
   }, [session?.user?.id, runFetchCalendarsWithTimeout]);
-
-  useEffect(() => {
-    if (session?.user?.id) calendarsAutoCreateAttemptedRef.current = false;
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    if (calendarsList.length > 0) calendarsAutoCreateAttemptedRef.current = false;
-  }, [calendarsList.length]);
-
-  useEffect(() => {
-    if (!session?.user?.id || calendarsLoading || calendarsList.length > 0) return;
-    if (calendarsAutoCreateAttemptedRef.current) return;
-    calendarsAutoCreateAttemptedRef.current = true;
-    setCalendarsAutoCreating(true);
-    createDefaultCalendar()
-      .then((created) => {
-        if (created) {
-          setCalendarsList([created]);
-          setCurrentCalendarId(created.id);
-          setCalendarsReconnecting(false);
-          setCalendarsEmptyPrompt(null);
-          calendarsAutoRetryCountRef.current = 0;
-        } else {
-          if (calendarsRetryCountRef.current >= 1) {
-            setCalendarsLoadFailed(true);
-            setCalendarsReconnecting(false);
-          } else {
-            calendarsAutoCreateAttemptedRef.current = false;
-            calendarsRetryCountRef.current += 1;
-            setCalendarsReconnecting(true);
-            setTimeout(() => runFetchCalendarsWithTimeoutRef.current(), 2000);
-          }
-        }
-      })
-      .finally(() => setCalendarsAutoCreating(false));
-  }, [session?.user?.id, calendarsLoading, calendarsList.length, createDefaultCalendar]);
 
   const fetchCalendarMembers = React.useCallback(
     async (calendarId: string | null) => {
@@ -1171,7 +1104,6 @@ export default function Home() {
       .single();
     if (calErr || !cal) {
       console.error("Failed to create calendar", calErr);
-      if (calErr && isInfiniteRecursionError(calErr)) handleInfiniteRecursion();
       setCreateCalendarError(calErr?.message ?? "カレンダーの作成に失敗しました");
       setCreateCalendarLoading(false);
       return;
@@ -1185,7 +1117,6 @@ export default function Home() {
     });
     if (memberErr) {
       console.error("Failed to add owner to new calendar", memberErr);
-      if (isInfiniteRecursionError(memberErr)) handleInfiniteRecursion();
       setCreateCalendarError("カレンダーの設定に失敗しました");
       setCreateCalendarLoading(false);
       return;
@@ -1509,7 +1440,7 @@ export default function Home() {
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="第1プロジェクト、チーム共有 など"
+                placeholder="第1プロジェクト、営業1課 共有用 など"
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
