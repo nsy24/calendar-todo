@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { format, isSameDay, startOfWeek, endOfWeek } from "date-fns";
+import { format, isSameDay, startOfWeek, endOfWeek, addMonths, startOfMonth, endOfMonth } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -43,6 +43,9 @@ interface Todo {
   priority: Priority;
   position: number;
   userId?: string;
+  reminderTime?: string | null;
+  reminderDate?: string | null;
+  isMonthlyRecurring?: boolean;
 }
 
 interface Profile {
@@ -171,6 +174,13 @@ export default function Home() {
   const [newCalendarName, setNewCalendarName] = useState("");
   const [createCalendarLoading, setCreateCalendarLoading] = useState(false);
   const [createCalendarError, setCreateCalendarError] = useState<string | null>(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderTitle, setReminderTitle] = useState("");
+  const [reminderMode, setReminderMode] = useState<"time" | "date">("date");
+  const [reminderTime, setReminderTime] = useState("09:00");
+  const [reminderDate, setReminderDate] = useState("");
+  const [reminderMonthly, setReminderMonthly] = useState(false);
+  const [reminderSubmitting, setReminderSubmitting] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodoText, setNewTodoText] = useState("");
@@ -645,7 +655,7 @@ export default function Home() {
     }
     const { data, error } = await supabase
       .from("todos")
-      .select("id,title,completed,date,created_by_username,priority,position,user_id")
+      .select("id,title,completed,date,created_by_username,priority,position,user_id,reminder_time,reminder_date,is_monthly_recurring")
       .eq("calendar_id", currentCalendarId)
       .order("date", { ascending: true });
     if (error) {
@@ -663,6 +673,9 @@ export default function Home() {
       priority: (r.priority === "high" || r.priority === "medium" || r.priority === "low" ? r.priority : "medium") as Priority,
       position: typeof r.position === "number" ? r.position : 0,
       userId: r.user_id ?? undefined,
+      reminderTime: r.reminder_time != null ? String(r.reminder_time).slice(0, 5) : null,
+      reminderDate: r.reminder_date ?? null,
+      isMonthlyRecurring: Boolean(r.is_monthly_recurring),
     }));
     setTodos(mapped);
   }
@@ -973,6 +986,27 @@ export default function Home() {
       ? `${actor}がタスク「${target.text}」を完了しました`
       : `${actor}がタスク「${target.text}」の完了を解除しました`;
     await insertNotificationLog(msg);
+
+    if (newCompleted && target.isMonthlyRecurring && currentCalendarId && session?.user?.id) {
+      const nextMonthDate = addMonths(target.date, 1);
+      const nextDateStr = format(nextMonthDate, "yyyy-MM-dd");
+      const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
+      await supabase.from("todos").insert([
+        {
+          title: target.text,
+          date: nextDateStr,
+          calendar_id: currentCalendarId,
+          user_id: session.user.id,
+          created_by_username: profile?.username?.trim() ?? "",
+          priority: target.priority,
+          position: 0,
+          is_monthly_recurring: true,
+          reminder_time: reminderTimeVal,
+          reminder_date: target.reminderDate ?? nextDateStr,
+        },
+      ]);
+      fetchTodos();
+    }
   };
 
   const handleDeleteTodo = async (id: string) => {
@@ -1011,6 +1045,61 @@ export default function Home() {
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSubmit();
+  };
+
+  const openReminderModal = () => {
+    setReminderTitle("");
+    setReminderMode("date");
+    setReminderTime("09:00");
+    setReminderDate(format(selectedDate, "yyyy-MM-dd"));
+    setReminderMonthly(false);
+    setShowReminderModal(true);
+  };
+
+  const handleSubmitReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = reminderTitle.trim();
+    if (!title) return;
+    if (!session?.user?.id || !currentCalendarId) {
+      addToast("カレンダーを選択してください");
+      return;
+    }
+    setReminderSubmitting(true);
+    const taskDate = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
+    const payload: Record<string, unknown> = {
+      title,
+      date: taskDate,
+      calendar_id: currentCalendarId,
+      user_id: session.user.id,
+      created_by_username: profile?.username?.trim() ?? "",
+      priority: newTodoPriority,
+      position: 0,
+      is_monthly_recurring: reminderMonthly,
+    };
+    if (reminderMode === "time") {
+      payload.reminder_time = `${reminderTime}:00`;
+      payload.reminder_date = null;
+    } else {
+      payload.reminder_time = null;
+      payload.reminder_date = reminderDate || taskDate;
+    }
+    const { error } = await supabase.from("todos").insert([payload]).select();
+    setReminderSubmitting(false);
+    if (error) {
+      console.error("Reminder todo insert error", error);
+      addToast("リマインドの追加に失敗しました");
+      return;
+    }
+    setShowReminderModal(false);
+    fetchTodos();
+    addToast("リマインドを設定しました");
+  };
+
+  const setReminderDateToFirst = () => {
+    setReminderDate(format(startOfMonth(selectedDate), "yyyy-MM-dd"));
+  };
+  const setReminderDateToLast = () => {
+    setReminderDate(format(endOfMonth(selectedDate), "yyyy-MM-dd"));
   };
 
   const handleLogout = async () => {
@@ -1367,8 +1456,12 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <Button onClick={handleSubmit} size="icon">
+                <Button onClick={handleSubmit} size="icon" title="追加">
                   <Plus className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={openReminderModal} className="shrink-0" title="リマインド設定">
+                  <Clock className="h-4 w-4 mr-1" />
+                  リマインド設定
                 </Button>
               </div>
               <div className="space-y-2">
@@ -1434,6 +1527,118 @@ export default function Home() {
                 </Button>
                 <Button type="submit" disabled={createCalendarLoading}>
                   {createCalendarLoading ? "作成中..." : "作成する"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showReminderModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !reminderSubmitting && setShowReminderModal(false)}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-foreground mb-1">リマインド設定</h2>
+            <p className="text-sm text-muted-foreground mb-4">作業名とリマインド方法を指定してください。</p>
+            <form onSubmit={handleSubmitReminder} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">作業名</label>
+                <Input
+                  type="text"
+                  placeholder="請求書作成"
+                  value={reminderTitle}
+                  onChange={(e) => setReminderTitle(e.target.value)}
+                  maxLength={200}
+                  className="w-full"
+                  autoFocus
+                  disabled={reminderSubmitting}
+                />
+              </div>
+              <div>
+                <span className="text-sm font-medium text-foreground mb-2 block">リマインド方法</span>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="reminderMode"
+                      checked={reminderMode === "time"}
+                      onChange={() => setReminderMode("time")}
+                      className="rounded-full border-input"
+                    />
+                    <span className="text-sm">時間で指定</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="reminderMode"
+                      checked={reminderMode === "date"}
+                      onChange={() => setReminderMode("date")}
+                      className="rounded-full border-input"
+                    />
+                    <span className="text-sm">日付で指定</span>
+                  </label>
+                </div>
+              </div>
+              {reminderMode === "time" && (
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">時刻</label>
+                  <Input
+                    type="time"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="w-full max-w-[140px]"
+                    disabled={reminderSubmitting}
+                  />
+                </div>
+              )}
+              {reminderMode === "date" && (
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">日付</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      type="date"
+                      value={reminderDate}
+                      onChange={(e) => setReminderDate(e.target.value)}
+                      className="w-full max-w-[180px]"
+                      disabled={reminderSubmitting}
+                    />
+                    <div className="flex gap-1">
+                      <Button type="button" variant="outline" size="sm" onClick={setReminderDateToFirst} disabled={reminderSubmitting}>
+                        月初（1日）
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={setReminderDateToLast} disabled={reminderSubmitting}>
+                        月末
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="reminder-monthly"
+                  checked={reminderMonthly}
+                  onChange={(e) => setReminderMonthly(e.target.checked)}
+                  disabled={reminderSubmitting}
+                />
+                <label htmlFor="reminder-monthly" className="text-sm text-foreground cursor-pointer">
+                  毎月この日にリマインドする
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => !reminderSubmitting && setShowReminderModal(false)}
+                  disabled={reminderSubmitting}
+                >
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={reminderSubmitting || !reminderTitle.trim()}>
+                  {reminderSubmitting ? "設定中..." : "設定する"}
                 </Button>
               </div>
             </form>
