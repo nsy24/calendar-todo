@@ -180,6 +180,7 @@ export default function Home() {
   const [reminderTime, setReminderTime] = useState("09:00");
   const [reminderDate, setReminderDate] = useState("");
   const [reminderMonthly, setReminderMonthly] = useState(false);
+  const [reminderDayOfMonth, setReminderDayOfMonth] = useState(1);
   const [reminderSubmitting, setReminderSubmitting] = useState(false);
   const [showReminderListModal, setShowReminderListModal] = useState(false);
   const [reminderEditId, setReminderEditId] = useState<string | null>(null);
@@ -1097,8 +1098,26 @@ export default function Home() {
     setReminderTime("09:00");
     setReminderDate(format(selectedDate, "yyyy-MM-dd"));
     setReminderMonthly(false);
+    setReminderDayOfMonth(selectedDate.getDate());
     setShowReminderModal(true);
   };
+
+  function getNextOccurrenceOfDay(dayOfMonth: number, fromDate: Date): Date {
+    const from = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+    if (dayOfMonth <= 0) {
+      const endThis = endOfMonth(from);
+      if (endThis > from) return endThis;
+      return endOfMonth(addMonths(from, 1));
+    }
+    const lastDay = endOfMonth(from).getDate();
+    const day = Math.min(dayOfMonth, lastDay);
+    let next = new Date(from.getFullYear(), from.getMonth(), day);
+    if (next <= from) {
+      next = addMonths(next, 1);
+      next = new Date(next.getFullYear(), next.getMonth(), Math.min(dayOfMonth, endOfMonth(next).getDate()));
+    }
+    return next;
+  }
 
   const handleSubmitReminder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1109,16 +1128,15 @@ export default function Home() {
       return;
     }
     setReminderSubmitting(true);
-    const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
-    const baseDate = new Date(taskDateStr + "T12:00:00");
-    const isLastDayOfMonth = isSameDay(baseDate, endOfMonth(baseDate));
+    const now = new Date();
     const reminderTimeVal = reminderMode === "time" ? `${reminderTime}:00` : null;
-    const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : null;
 
     const rowsToInsert: Record<string, unknown>[] = [];
     if (reminderMonthly) {
+      const firstDate = getNextOccurrenceOfDay(reminderDayOfMonth, now);
+      const isLastDayOfMonth = reminderDayOfMonth <= 0 || firstDate.getDate() === endOfMonth(firstDate).getDate();
       for (let i = 0; i < 3; i++) {
-        const d = addMonths(baseDate, i);
+        const d = addMonths(firstDate, i);
         const dateStr = format(isLastDayOfMonth ? endOfMonth(d) : d, "yyyy-MM-dd");
         rowsToInsert.push({
           title,
@@ -1130,10 +1148,12 @@ export default function Home() {
           position: 0,
           is_monthly_recurring: true,
           reminder_time: reminderTimeVal,
-          reminder_date: reminderDateVal ?? dateStr,
+          reminder_date: dateStr,
         });
       }
     } else {
+      const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
+      const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : taskDateStr;
       rowsToInsert.push({
         title,
         date: taskDateStr,
@@ -1144,7 +1164,7 @@ export default function Home() {
         position: 0,
         is_monthly_recurring: false,
         reminder_time: reminderTimeVal,
-        reminder_date: reminderDateVal ?? taskDateStr,
+        reminder_date: reminderDateVal,
       });
     }
 
@@ -1681,76 +1701,117 @@ export default function Home() {
                   disabled={reminderSubmitting}
                 />
               </div>
-              <div>
-                <span className="text-sm font-medium text-foreground mb-2 block">リマインド方法</span>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="reminderMode"
-                      checked={reminderMode === "time"}
-                      onChange={() => setReminderMode("time")}
-                      className="rounded-full border-input"
-                    />
-                    <span className="text-sm">時間で指定</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="reminderMode"
-                      checked={reminderMode === "date"}
-                      onChange={() => setReminderMode("date")}
-                      className="rounded-full border-input"
-                    />
-                    <span className="text-sm">日付で指定</span>
-                  </label>
-                </div>
-              </div>
-              {reminderMode === "time" && (
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">時刻</label>
-                  <Input
-                    type="time"
-                    value={reminderTime}
-                    onChange={(e) => setReminderTime(e.target.value)}
-                    className="w-full max-w-[140px]"
-                    disabled={reminderSubmitting}
-                  />
-                </div>
-              )}
-              {reminderMode === "date" && (
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">日付</label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      type="date"
-                      value={reminderDate}
-                      onChange={(e) => setReminderDate(e.target.value)}
-                      className="w-full max-w-[180px]"
-                      disabled={reminderSubmitting}
-                    />
-                    <div className="flex gap-1">
-                      <Button type="button" variant="outline" size="sm" onClick={setReminderDateToFirst} disabled={reminderSubmitting}>
-                        月初（1日）
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={setReminderDateToLast} disabled={reminderSubmitting}>
-                        月末
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="reminder-monthly"
                   checked={reminderMonthly}
-                  onChange={(e) => setReminderMonthly(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setReminderMonthly(checked);
+                    if (checked) {
+                      const from = reminderDate ? new Date(reminderDate + "T12:00:00") : selectedDate;
+                      setReminderDayOfMonth(isSameDay(from, endOfMonth(from)) ? 0 : from.getDate());
+                    }
+                  }}
                   disabled={reminderSubmitting}
                 />
                 <label htmlFor="reminder-monthly" className="text-sm text-foreground cursor-pointer">
                   毎月この日にリマインドする
                 </label>
               </div>
+              {reminderMonthly ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground block">日（例：25日）</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={reminderDayOfMonth <= 0 ? "last" : reminderDayOfMonth}
+                      onChange={(e) => setReminderDayOfMonth(e.target.value === "last" ? 0 : Number(e.target.value))}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[80px]"
+                      disabled={reminderSubmitting}
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d}>
+                          {d}日
+                        </option>
+                      ))}
+                      <option value="last">月末</option>
+                    </select>
+                    <span className="text-sm text-muted-foreground">
+                      {reminderDayOfMonth <= 0 ? "月末" : `${reminderDayOfMonth}日`}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">時刻（任意）</label>
+                    <Input
+                      type="time"
+                      value={reminderTime}
+                      onChange={(e) => setReminderTime(e.target.value)}
+                      className="w-full max-w-[140px]"
+                      disabled={reminderSubmitting}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <span className="text-sm font-medium text-foreground mb-2 block">リマインド方法</span>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="reminderMode"
+                          checked={reminderMode === "time"}
+                          onChange={() => setReminderMode("time")}
+                          className="rounded-full border-input"
+                        />
+                        <span className="text-sm">時間で指定</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="reminderMode"
+                          checked={reminderMode === "date"}
+                          onChange={() => setReminderMode("date")}
+                          className="rounded-full border-input"
+                        />
+                        <span className="text-sm">日付で指定</span>
+                      </label>
+                    </div>
+                  </div>
+                  {reminderMode === "time" && (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">時刻</label>
+                      <Input
+                        type="time"
+                        value={reminderTime}
+                        onChange={(e) => setReminderTime(e.target.value)}
+                        className="w-full max-w-[140px]"
+                        disabled={reminderSubmitting}
+                      />
+                    </div>
+                  )}
+                  {reminderMode === "date" && (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">日付</label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="date"
+                          value={reminderDate}
+                          onChange={(e) => setReminderDate(e.target.value)}
+                          className="w-full max-w-[180px]"
+                          disabled={reminderSubmitting}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={setReminderDateToFirst} disabled={reminderSubmitting}>
+                          月初（1日）
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={setReminderDateToLast} disabled={reminderSubmitting}>
+                          月末
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="flex justify-end gap-2 pt-1">
                 <Button
                   type="button"
@@ -1823,11 +1884,20 @@ export default function Home() {
                           )}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">
-                          {t.reminderTime != null && t.reminderTime !== ""
-                            ? `${format(t.date, "yyyy/MM/dd")} ${t.reminderTime}`
-                            : t.reminderDate != null && t.reminderDate !== ""
-                              ? format(new Date(t.reminderDate + "T12:00:00"), "yyyy/MM/dd")
-                              : format(t.date, "yyyy/MM/dd")}
+                          {t.isMonthlyRecurring
+                            ? (() => {
+                                const d = t.reminderDate ? new Date(t.reminderDate + "T12:00:00") : t.date;
+                                const day = d.getDate();
+                                const isLast = isSameDay(d, endOfMonth(d));
+                                const dayLabel = isLast ? "月末" : `${day}日`;
+                                const timePart = t.reminderTime != null && t.reminderTime !== "" ? ` ${t.reminderTime}` : "";
+                                return `毎月 ${dayLabel}${timePart}`;
+                              })()
+                            : t.reminderTime != null && t.reminderTime !== ""
+                              ? `${format(t.date, "yyyy/MM/dd")} ${t.reminderTime}`
+                              : t.reminderDate != null && t.reminderDate !== ""
+                                ? format(new Date(t.reminderDate + "T12:00:00"), "yyyy/MM/dd")
+                                : format(t.date, "yyyy/MM/dd")}
                         </td>
                         <td className="py-2 px-3">{t.isMonthlyRecurring ? "する" : "—"}</td>
                         <td className="py-2 px-3 text-right">
