@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil, ChevronDown, RefreshCw } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -202,6 +202,14 @@ export default function Home() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const [showRenameCalendarModal, setShowRenameCalendarModal] = useState(false);
+  const [renameCalendarValue, setRenameCalendarValue] = useState("");
+  const [renameCalendarLoading, setRenameCalendarLoading] = useState(false);
+  const [renameCalendarError, setRenameCalendarError] = useState<string | null>(null);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
   const notifiedReminderRef = useRef<Set<string>>(new Set());
   const todosRef = useRef<Todo[]>([]);
@@ -237,6 +245,18 @@ export default function Home() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const onOutside = (e: MouseEvent) => {
+      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(e.target as Node)) {
+        setShowSettingsDropdown(false);
+      }
+    };
+    if (showSettingsDropdown) {
+      document.addEventListener("click", onOutside);
+      return () => document.removeEventListener("click", onOutside);
+    }
+  }, [showSettingsDropdown]);
 
   const fetchProfile = React.useCallback(async () => {
     if (!session?.user?.id) {
@@ -1248,7 +1268,78 @@ export default function Home() {
     fetchTodos();
   };
 
+  const handleRenameCalendar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = renameCalendarValue.trim();
+    if (!name) {
+      setRenameCalendarError("名前を入力してください");
+      return;
+    }
+    if (name.length > 100) {
+      setRenameCalendarError("カレンダー名は100文字以内にしてください");
+      return;
+    }
+    if (!currentCalendarId || !session?.user?.id) return;
+    setRenameCalendarError(null);
+    setRenameCalendarLoading(true);
+    const { error } = await supabase.from("calendars").update({ name }).eq("id", currentCalendarId).eq("created_by", session.user.id);
+    if (error) {
+      console.error("Failed to rename calendar", error);
+      setRenameCalendarError(error.message ?? "名前の変更に失敗しました");
+      setRenameCalendarLoading(false);
+      return;
+    }
+    setCalendarsList((prev) => prev.map((c) => (c.id === currentCalendarId ? { ...c, name } : c)));
+    setShowRenameCalendarModal(false);
+    setRenameCalendarValue("");
+    setRenameCalendarLoading(false);
+    setShowSettingsDropdown(false);
+    addToast("カレンダー名を変更しました");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!session?.user?.id) return;
+    setDeleteAccountLoading(true);
+    try {
+      const uid = session.user.id;
+      const { error: todosErr } = await supabase.from("todos").delete().eq("user_id", uid);
+      if (todosErr) {
+        console.error("Failed to delete todos", todosErr);
+        addToast("データの削除に失敗しました");
+        setDeleteAccountLoading(false);
+        return;
+      }
+      const { error: membersErr } = await supabase.from("calendar_members").delete().eq("user_id", uid);
+      if (membersErr) {
+        console.error("Failed to delete calendar_members", membersErr);
+        addToast("データの削除に失敗しました");
+        setDeleteAccountLoading(false);
+        return;
+      }
+      const { data: myCalendars } = await supabase.from("calendars").select("id").eq("created_by", uid);
+      if (myCalendars?.length) {
+        for (const cal of myCalendars) {
+          await supabase.from("calendars").delete().eq("id", cal.id);
+        }
+      }
+      const { error: profileErr } = await supabase.from("profiles").delete().eq("id", uid);
+      if (profileErr) {
+        console.error("Failed to delete profile", profileErr);
+        addToast("データの削除に失敗しました");
+        setDeleteAccountLoading(false);
+        return;
+      }
+      setShowDeleteAccountConfirm(false);
+      setShowSettingsDropdown(false);
+      await supabase.auth.signOut();
+      addToast("アカウントを削除しました");
+    } finally {
+      setDeleteAccountLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
+    setShowSettingsDropdown(false);
     await supabase.auth.signOut();
   };
 
@@ -1419,9 +1510,6 @@ export default function Home() {
                 );
               })}
             </div>
-            <Button variant="outline" size="sm" onClick={handleRandomAvatar}>
-              アバターをランダム生成
-            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowReminderListModal(true)} title="リマインド一覧">
               <List className="h-4 w-4 mr-1" />
               リマインド一覧
@@ -1435,9 +1523,76 @@ export default function Home() {
                 通知を有効にする
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="ログアウト">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <div className="relative shrink-0" ref={settingsDropdownRef}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettingsDropdown((v) => !v)}
+                className="flex items-center gap-1.5"
+                aria-haspopup="true"
+                aria-expanded={showSettingsDropdown}
+                aria-label="設定メニュー"
+              >
+                <Avatar seed={(profile?.avatar_seed?.trim() || profile?.username || "default") as string} size={24} />
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showSettingsDropdown && "rotate-180")} />
+              </Button>
+              {showSettingsDropdown && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-md border bg-card shadow-lg py-1"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                    onClick={() => {
+                      handleRandomAvatar();
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 shrink-0" />
+                    アバターをランダム生成
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left disabled:opacity-50"
+                    disabled={!currentCalendarId || calendarsList.length === 0}
+                    onClick={() => {
+                      const cal = calendarsList.find((c) => c.id === currentCalendarId);
+                      setRenameCalendarValue(cal?.name ?? "");
+                      setRenameCalendarError(null);
+                      setShowRenameCalendarModal(true);
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 shrink-0" />
+                    カレンダー名変更
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-destructive/10 text-destructive text-left"
+                    onClick={() => {
+                      setShowDeleteAccountConfirm(true);
+                      setShowSettingsDropdown(false);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    アカウント削除
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-left"
+                    onClick={() => handleLogout()}
+                  >
+                    <LogOut className="h-4 w-4 shrink-0" />
+                    ログアウト
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {calendarsLoading && !currentCalendarId && !calendarsReconnecting && (
@@ -1680,6 +1835,83 @@ export default function Home() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showRenameCalendarModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !renameCalendarLoading && setShowRenameCalendarModal(false)}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold mb-1">カレンダー名を変更</h2>
+            <p className="text-sm text-muted-foreground mb-3">現在表示中のカレンダー名を編集できます。</p>
+            <form onSubmit={handleRenameCalendar} className="space-y-3">
+              <Input
+                type="text"
+                placeholder="カレンダー名"
+                value={renameCalendarValue}
+                onChange={(e) => {
+                  setRenameCalendarValue(e.target.value);
+                  setRenameCalendarError(null);
+                }}
+                maxLength={100}
+                className="w-full"
+                autoFocus
+                disabled={renameCalendarLoading}
+              />
+              {renameCalendarError && <p className="text-sm text-destructive">{renameCalendarError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => !renameCalendarLoading && setShowRenameCalendarModal(false)}
+                  disabled={renameCalendarLoading}
+                >
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={renameCalendarLoading}>
+                  {renameCalendarLoading ? "保存中..." : "保存する"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showDeleteAccountConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !deleteAccountLoading && setShowDeleteAccountConfirm(false)}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-destructive mb-1">アカウントを削除しますか？</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              データをすべて削除して退会します。この操作は取り消せません。本当に退会しますか？
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => !deleteAccountLoading && setShowDeleteAccountConfirm(false)}
+                disabled={deleteAccountLoading}
+              >
+                キャンセル
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={deleteAccountLoading}
+              >
+                {deleteAccountLoading ? "削除中..." : "データをすべて削除して退会する"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
