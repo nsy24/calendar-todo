@@ -1072,12 +1072,13 @@ export default function Home() {
       const isLastDay = isSameDay(target.date, endOfMonth(target.date));
       const nextDateStr = format(isLastDay ? endOfMonth(nextMonthDate) : nextMonthDate, "yyyy-MM-dd");
       const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
+      const nextUserId = target.userId ?? session.user.id;
       await supabase.from("todos").insert([
         {
           title: target.text,
           date: nextDateStr,
           calendar_id: currentCalendarId,
-          user_id: session.user.id,
+          user_id: nextUserId,
           created_by_username: profile?.username?.trim() ?? "",
           priority: target.priority,
           position: 0,
