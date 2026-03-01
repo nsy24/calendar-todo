@@ -1281,12 +1281,26 @@ export default function Home() {
       return;
     }
     if (!session?.user?.id) return;
+    const currentUsername = (profile?.username ?? "").trim();
+    if (trimmed === currentUsername) {
+      setShowUsernameEditModal(false);
+      setUsernameEditValue("");
+      setUsernameEditError(null);
+      setShowSettingsDropdown(false);
+      addToast("変更がありません");
+      return;
+    }
     setUsernameEditError(null);
     setUsernameEditLoading(true);
     const { error } = await supabase.from("profiles").update({ username: trimmed }).eq("id", session.user.id);
     if (error) {
       console.error("Failed to update username", error);
-      setUsernameEditError(error.message ?? "変更に失敗しました");
+      const isDuplicate = error.code === "23505" || /duplicate|unique/i.test(error.message ?? "");
+      const message = isDuplicate
+        ? "このユーザー名は既に使われています。別の名前を入力してください"
+        : (error.message ?? "変更に失敗しました");
+      setUsernameEditError(message);
+      if (isDuplicate) addToast(message);
       setUsernameEditLoading(false);
       return;
     }
