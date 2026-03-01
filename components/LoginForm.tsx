@@ -115,7 +115,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </button>
       </div>
       <p className="text-xs text-muted-foreground mt-4">
-        アカウント作成後、あなた専用のユーザー名を設定してカレンダーを始めましょう。
+        SyncTaskで、アカウント作成後にあなた専用のユーザー名を設定してタスク管理を始めましょう。
       </p>
     </div>
   );

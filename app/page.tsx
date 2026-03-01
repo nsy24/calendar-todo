@@ -1399,7 +1399,7 @@ export default function Home() {
   if (!session) {
     return (
       <div className="min-h-screen bg-background p-4">
-        <h1 className="text-2xl font-bold text-center mb-2">カレンダーTodoリスト</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-center mb-2">SyncTask</h1>
         <LoginForm />
       </div>
     );
@@ -1503,7 +1503,7 @@ export default function Home() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold shrink-0">カレンダーTodoリスト</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold shrink-0 tracking-tight text-foreground">SyncTask</h1>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-lg text-muted-foreground" aria-hidden>📅</span>
               <select

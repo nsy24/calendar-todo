@@ -5,10 +5,10 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "カレンダーTodoリスト",
-  description: "第1プロジェクト・チーム共有向けのカレンダー形式Todoリスト",
+  title: "SyncTask | スマートなカレンダータスク管理",
+  description: "SyncTask - 第1プロジェクト・チーム共有向けのスマートなカレンダータスク管理",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, title: "Todoカレンダー" },
+  appleWebApp: { capable: true, title: "SyncTask" },
 };
 
 export const viewport = {
