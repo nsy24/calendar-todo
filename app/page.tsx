@@ -209,6 +209,10 @@ export default function Home() {
   const [renameCalendarError, setRenameCalendarError] = useState<string | null>(null);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const [showUsernameEditModal, setShowUsernameEditModal] = useState(false);
+  const [usernameEditValue, setUsernameEditValue] = useState("");
+  const [usernameEditLoading, setUsernameEditLoading] = useState(false);
+  const [usernameEditError, setUsernameEditError] = useState<string | null>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
   const notifiedReminderRef = useRef<Set<string>>(new Set());
@@ -1268,6 +1272,32 @@ export default function Home() {
     fetchTodos();
   };
 
+  const handleSaveUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = usernameEditValue.trim();
+    const err = validateUsername(trimmed);
+    if (err) {
+      setUsernameEditError(err);
+      return;
+    }
+    if (!session?.user?.id) return;
+    setUsernameEditError(null);
+    setUsernameEditLoading(true);
+    const { error } = await supabase.from("profiles").update({ username: trimmed }).eq("id", session.user.id);
+    if (error) {
+      console.error("Failed to update username", error);
+      setUsernameEditError(error.message ?? "変更に失敗しました");
+      setUsernameEditLoading(false);
+      return;
+    }
+    await fetchProfile();
+    setShowUsernameEditModal(false);
+    setUsernameEditValue("");
+    setUsernameEditLoading(false);
+    setShowSettingsDropdown(false);
+    addToast("ユーザー名を変更しました");
+  };
+
   const handleRenameCalendar = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = renameCalendarValue.trim();
@@ -1538,9 +1568,28 @@ export default function Home() {
               </Button>
               {showSettingsDropdown && (
                 <div
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-md border bg-card shadow-lg py-1"
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-md border bg-card shadow-lg py-1"
                   role="menu"
                 >
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground truncate" title={profile?.username ?? "（未設定）"}>
+                      {profile?.username?.trim() || "（未設定）"}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setUsernameEditValue(profile?.username?.trim() ?? "");
+                        setUsernameEditError(null);
+                        setShowUsernameEditModal(true);
+                        setShowSettingsDropdown(false);
+                      }}
+                      title="ユーザー名を変更"
+                      aria-label="ユーザー名を変更"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </div>
                   <button
                     type="button"
                     role="menuitem"
@@ -1832,6 +1881,49 @@ export default function Home() {
                 </Button>
                 <Button type="submit" disabled={createCalendarLoading}>
                   {createCalendarLoading ? "作成中..." : "作成する"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showUsernameEditModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !usernameEditLoading && setShowUsernameEditModal(false)}
+        >
+          <div
+            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold mb-1">ユーザー名を変更</h2>
+            <p className="text-sm text-muted-foreground mb-3">半角英数字と記号（. _ -）が使えます。2〜50文字。</p>
+            <form onSubmit={handleSaveUsername} className="space-y-3">
+              <Input
+                type="text"
+                placeholder="ユーザー名"
+                value={usernameEditValue}
+                onChange={(e) => {
+                  setUsernameEditValue(e.target.value);
+                  setUsernameEditError(null);
+                }}
+                maxLength={50}
+                className="w-full"
+                autoFocus
+                disabled={usernameEditLoading}
+              />
+              {usernameEditError && <p className="text-sm text-destructive">{usernameEditError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => !usernameEditLoading && setShowUsernameEditModal(false)}
+                  disabled={usernameEditLoading}
+                >
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={usernameEditLoading}>
+                  {usernameEditLoading ? "保存中..." : "保存する"}
                 </Button>
               </div>
             </form>
