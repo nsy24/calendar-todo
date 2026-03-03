@@ -1617,9 +1617,10 @@ export default function Home() {
                         key={lng}
                         type="button"
                         onClick={() => {
-                          i18n.changeLanguage(lng);
                           if (typeof window !== "undefined") window.localStorage.setItem("syncTask_lang", lng);
-                          setShowSettingsDropdown(false);
+                          i18n.changeLanguage(lng).then(() => {
+                            setShowSettingsDropdown(false);
+                          });
                         }}
                         className={cn(
                           "px-2 py-0.5 rounded text-xs font-medium transition-colors",
