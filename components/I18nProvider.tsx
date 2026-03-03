@@ -1,58 +1,61 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { I18nextProvider } from "react-i18next";
+import React, { ReactNode, useEffect, useState } from "react";
 import i18n from "i18next";
-import { initReactI18next } from "react-i18next";
+import { initReactI18next, I18nextProvider } from "react-i18next";
 import ja from "@/locales/ja.json";
 import en from "@/locales/en.json";
 import zh from "@/locales/zh.json";
 import ko from "@/locales/ko.json";
 
 const resources = {
-  ja: { translation: ja as Record<string, unknown> },
-  en: { translation: en as Record<string, unknown> },
-  zh: { translation: zh as Record<string, unknown> },
-  ko: { translation: ko as Record<string, unknown> },
+  ja: { translation: ja },
+  en: { translation: en },
+  zh: { translation: zh },
+  ko: { translation: ko },
 };
 
 const initOptions = {
   resources,
   lng: "ja",
-  fallbackLng: "ja",
-  defaultNS: "translation",
-  ns: ["translation"],
+  fallbackLng: "en",
   interpolation: { escapeValue: false },
-  supportedLngs: ["ja", "en", "zh", "ko"],
-  react: { useSuspense: false },
 };
 
-i18n.use(initReactI18next);
-
-/** i18n を一度だけ初期化。型エラーを避けるため Promise<void> を返す */
-async function ensureI18nInit(): Promise<void> {
-  if (i18n.isInitialized) return;
-  await i18n.init(initOptions);
+if (!i18n.isInitialized) {
+  i18n.use(initReactI18next).init(initOptions);
 }
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
+async function ensureReady(): Promise<void> {
+  if (i18n.isInitialized) return;
+  await new Promise<void>((resolve) => {
+    if (i18n.isInitialized) {
+      resolve();
+      return;
+    }
+    i18n.on("initialized", () => resolve());
+  });
+}
+
+export default function I18nProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const lng = typeof window !== "undefined" ? (localStorage.getItem("syncTask_lang") as "ja" | "en" | "zh" | "ko") || "ja" : "ja";
-    ensureI18nInit()
-      .then(() => (i18n.language !== lng ? i18n.changeLanguage(lng) : Promise.resolve()))
-      .then(() => setIsReady(true))
-      .catch((err) => {
-        console.error("i18n init failed", err);
-        setIsReady(true);
-      });
+    const initI18n = async () => {
+      await ensureReady();
+      const savedLang = (localStorage.getItem("syncTask_lang") as "ja" | "en" | "zh" | "ko") || "ja";
+      if (i18n.language !== savedLang) {
+        await i18n.changeLanguage(savedLang);
+      }
+      setIsReady(true);
+    };
+    initI18n();
   }, []);
 
   if (!isReady) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-slate-500 text-sm">Loading...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-medium text-slate-400">
+        Loading...
       </div>
     );
   }
