@@ -92,7 +92,8 @@
     "addPlaceholder": "添加新待办...",
     "empty": "当天无待办",
     "reminderSetting": "提醒",
-    "reminderList": "提醒列表"
+    "reminderList": "提醒列表",
+    "originalText": "原文"
   },
   "reminder": {
     "title": "提醒设置",

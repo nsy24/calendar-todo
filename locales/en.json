@@ -92,7 +92,8 @@
     "addPlaceholder": "Add new todo...",
     "empty": "No todos on this day",
     "reminderSetting": "Reminder",
-    "reminderList": "Reminder list"
+    "reminderList": "Reminder list",
+    "originalText": "Original text"
   },
   "reminder": {
     "title": "Reminder settings",

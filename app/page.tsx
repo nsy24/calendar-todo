@@ -25,6 +25,7 @@ import { LoginForm } from "@/components/LoginForm";
 import { AdsCard } from "@/components/AdsCard";
 import { cn } from "@/lib/utils";
 import { validateUsername } from "@/lib/validation";
+import { translateTaskTitle } from "@/lib/translate";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 
@@ -49,6 +50,8 @@ interface Todo {
   reminderTime?: string | null;
   reminderDate?: string | null;
   isMonthlyRecurring?: boolean;
+  /** タスク名の言語別翻訳。キー: ja, en, zh, ko。表示言語に応じてこちらを優先表示 */
+  translations?: Record<string, string> | null;
 }
 
 interface Profile {
@@ -92,11 +95,13 @@ function SortableTodoRow({
   onChangePriority: (id: string, priority: Priority) => void;
   onDelete: (id: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
   const priorityLabel = (p: Priority) => t(`priority.${p}`);
+  const displayText = (todo.translations && todo.translations[i18n.language]) || todo.text;
+  const showOriginalTip = Boolean(todo.translations);
   return (
     <div
       ref={setNodeRef}
@@ -115,7 +120,12 @@ function SortableTodoRow({
       <Avatar seed={todoUserSeed} size={32} />
       <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`${t("priority.changePriority")}: ${priorityLabel(todo.priority)}`} />
       <Checkbox checked={todo.completed} onChange={() => onToggle(todo.id)} />
-      <span className={cn("flex-1 font-medium text-[15px] text-slate-800", todo.completed && "line-through text-slate-500 font-normal")}>{todo.text}</span>
+      <span className={cn("flex-1 font-medium text-[15px] text-slate-800 flex items-center gap-1", todo.completed && "line-through text-slate-500 font-normal")}>
+        {displayText}
+        {showOriginalTip && (
+          <span className="inline-flex text-slate-400 cursor-help text-sm" title={todo.text} aria-label={t("todo.originalText") ?? "原文"}>🌐</span>
+        )}
+      </span>
       <select
         value={todo.priority}
         onChange={(e) => onChangePriority(todo.id, e.target.value as Priority)}
@@ -703,7 +713,7 @@ export default function Home() {
     }
     const { data, error } = await supabase
       .from("todos")
-      .select("id,title,completed,date,created_by_username,priority,position,user_id,reminder_time,reminder_date,is_monthly_recurring")
+      .select("id,title,completed,date,created_by_username,priority,position,user_id,reminder_time,reminder_date,is_monthly_recurring,translations")
       .eq("calendar_id", currentCalendarId)
       .order("date", { ascending: true });
     if (error) {
@@ -724,6 +734,7 @@ export default function Home() {
       reminderTime: r.reminder_time != null ? String(r.reminder_time).slice(0, 5) : null,
       reminderDate: r.reminder_date ?? null,
       isMonthlyRecurring: Boolean(r.is_monthly_recurring),
+      translations: (r.translations && typeof r.translations === "object") ? r.translations as Record<string, string> : null,
     }));
     setTodos(mapped);
   }
@@ -1039,6 +1050,13 @@ export default function Home() {
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("Todoを追加しました", { body: title });
         }
+        (async () => {
+          const trans = await translateTaskTitle(title);
+          if (trans && data[0]?.id) {
+            await supabase.from("todos").update({ translations: trans }).eq("id", data[0].id);
+            fetchTodos();
+          }
+        })();
       } else {
         fetchTodos();
       }
@@ -1086,7 +1104,7 @@ export default function Home() {
       const nextDateStr = format(isLastDay ? endOfMonth(nextMonthDate) : nextMonthDate, "yyyy-MM-dd");
       const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
       const nextUserId = target.userId ?? session.user.id;
-      await supabase.from("todos").insert([
+      const { data: inserted } = await supabase.from("todos").insert([
         {
           title: target.text,
           date: nextDateStr,
@@ -1099,7 +1117,11 @@ export default function Home() {
           reminder_time: reminderTimeVal,
           reminder_date: target.reminderDate ?? nextDateStr,
         },
-      ]);
+      ]).select("id");
+      if (inserted?.[0]?.id) {
+        const trans = await translateTaskTitle(target.text);
+        if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", inserted[0].id);
+      }
       fetchTodos();
     }
   };
@@ -1215,7 +1237,7 @@ export default function Home() {
       });
     }
 
-    const { error } = await supabase.from("todos").insert(rowsToInsert).select();
+    const { data: insertedRows, error } = await supabase.from("todos").insert(rowsToInsert).select("id,title");
     setReminderSubmitting(false);
     if (error) {
       console.error("Reminder todo insert error", error);
@@ -1225,6 +1247,16 @@ export default function Home() {
     setShowReminderModal(false);
     fetchTodos();
     addToast(t("reminder.reminderSet"));
+    if (insertedRows?.length) {
+      (async () => {
+        for (const row of insertedRows) {
+          const t = (row as { id: string; title: string });
+          const trans = await translateTaskTitle(t.title);
+          if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", t.id);
+        }
+        fetchTodos();
+      })();
+    }
   };
 
   const setReminderDateToFirst = () => {
@@ -1249,6 +1281,11 @@ export default function Home() {
     setReminderEditTitle("");
     fetchTodos();
     addToast(t("toast.reminderRenamed"));
+    (async () => {
+      const trans = await translateTaskTitle(reminderEditTitle.trim());
+      if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", reminderEditId);
+      fetchTodos();
+    })();
   };
 
   const handleReminderDelete = async (mode: "single" | "all", optionalId?: string) => {

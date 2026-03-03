@@ -92,7 +92,8 @@
     "addPlaceholder": "新しいTodoを追加...",
     "empty": "この日にはTodoがありません",
     "reminderSetting": "リマインド設定",
-    "reminderList": "リマインド一覧"
+    "reminderList": "リマインド一覧",
+    "originalText": "原文"
   },
   "reminder": {
     "title": "リマインド設定",
