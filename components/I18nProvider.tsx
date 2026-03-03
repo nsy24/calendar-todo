@@ -29,10 +29,10 @@ const initOptions = {
 
 i18n.use(initReactI18next);
 
-/** i18n を一度だけ初期化。init は Promise を返すため、ready になるまで子を出さない */
-function ensureI18nInit(): Promise<void> {
-  if (i18n.isInitialized) return Promise.resolve();
-  return i18n.init(initOptions);
+/** i18n を一度だけ初期化。型エラーを避けるため Promise<void> を返す */
+async function ensureI18nInit(): Promise<void> {
+  if (i18n.isInitialized) return;
+  await i18n.init(initOptions);
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
