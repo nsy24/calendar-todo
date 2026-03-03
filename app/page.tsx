@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { format, isSameDay, startOfWeek, endOfWeek, addMonths, startOfMonth, endOfMonth } from "date-fns";
+import { ja as dateFnsJa, enUS as dateFnsEn, zhCN as dateFnsZh, ko as dateFnsKo } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -218,7 +219,14 @@ export default function Home() {
   const [usernameEditLoading, setUsernameEditLoading] = useState(false);
   const [usernameEditError, setUsernameEditError] = useState<string | null>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
-  const { t } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
+  const dateFnsLocale = useMemo(() => {
+    const lng = i18nInstance.language;
+    if (lng === "ja") return dateFnsJa;
+    if (lng === "zh") return dateFnsZh;
+    if (lng === "ko") return dateFnsKo;
+    return dateFnsEn;
+  }, [i18nInstance.language]);
   const notifiedRef = useRef<Set<string>>(new Set());
   const notifiedReminderRef = useRef<Set<string>>(new Set());
   const todosRef = useRef<Todo[]>([]);
@@ -1810,7 +1818,7 @@ export default function Home() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{format(selectedDate, "yyyy年M月d日")}{t("todo.title")}</CardTitle>
+              <CardTitle>{format(selectedDate, "PPP", { locale: dateFnsLocale })}{t("todo.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -2077,18 +2085,18 @@ export default function Home() {
           onClick={() => !reminderSubmitting && setShowReminderModal(false)}
         >
           <div
-            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-5"
+            className="bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-md w-full p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-foreground mb-1">リマインド設定</h2>
-            <p className="text-sm text-muted-foreground mb-4">作業名とリマインド方法を指定してください。</p>
-            <p className="text-xs text-muted-foreground mb-4">※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます</p>
+            <h2 className="text-lg font-semibold text-foreground mb-1">{t("reminder.title")}</h2>
+            <p className="text-sm text-slate-500 mb-4">{t("reminder.description")}</p>
+            <p className="text-xs text-slate-500 mb-4">{t("reminder.autoRepeatNotice")}</p>
             <form onSubmit={handleSubmitReminder} className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">作業名</label>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">{t("reminder.taskName")}</label>
                 <Input
                   type="text"
-                  placeholder="請求書作成"
+                  placeholder={t("reminder.taskNamePlaceholder")}
                   value={reminderTitle}
                   onChange={(e) => setReminderTitle(e.target.value)}
                   maxLength={200}
@@ -2112,12 +2120,12 @@ export default function Home() {
                   disabled={reminderSubmitting}
                 />
                 <label htmlFor="reminder-monthly" className="text-sm text-foreground cursor-pointer">
-                  毎月この日にリマインドする
+                  {t("reminder.monthly")}
                 </label>
               </div>
               {reminderMonthly ? (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground block">日（例：25日）</label>
+                  <label className="text-sm font-medium text-foreground block">{t("reminder.dayLabel")}</label>
                   <div className="flex flex-wrap items-center gap-2">
                     <select
                       value={reminderDayOfMonth <= 0 ? "last" : reminderDayOfMonth}
@@ -2127,17 +2135,17 @@ export default function Home() {
                     >
                       {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                         <option key={d} value={d}>
-                          {d}日
+                          {[d, t("reminder.daySuffix")].filter(Boolean).join("")}
                         </option>
                       ))}
-                      <option value="last">月末</option>
+                      <option value="last">{t("reminder.monthEnd")}</option>
                     </select>
-                    <span className="text-sm text-muted-foreground">
-                      {reminderDayOfMonth <= 0 ? "月末" : `${reminderDayOfMonth}日`}
+                    <span className="text-sm text-slate-500">
+                      {reminderDayOfMonth <= 0 ? t("reminder.monthEnd") : `${reminderDayOfMonth}${t("reminder.daySuffix")}`}
                     </span>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">時刻（任意）</label>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">{t("reminder.timeLabelOptional")}</label>
                     <Input
                       type="time"
                       value={reminderTime}
@@ -2150,7 +2158,7 @@ export default function Home() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-foreground mb-2 block">リマインド方法</span>
+                    <span className="text-sm font-medium text-foreground mb-2 block">{t("reminder.methodLabel")}</span>
                     <div className="flex gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -2160,7 +2168,7 @@ export default function Home() {
                           onChange={() => setReminderMode("time")}
                           className="rounded-full border-input"
                         />
-                        <span className="text-sm">時間で指定</span>
+                        <span className="text-sm">{t("reminder.byTime")}</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -2170,13 +2178,13 @@ export default function Home() {
                           onChange={() => setReminderMode("date")}
                           className="rounded-full border-input"
                         />
-                        <span className="text-sm">日付で指定</span>
+                        <span className="text-sm">{t("reminder.byDate")}</span>
                       </label>
                     </div>
                   </div>
                   {reminderMode === "time" && (
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">時刻</label>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">{t("reminder.timeLabel")}</label>
                       <Input
                         type="time"
                         value={reminderTime}
@@ -2188,7 +2196,7 @@ export default function Home() {
                   )}
                   {reminderMode === "date" && (
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">日付</label>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">{t("reminder.dateLabel")}</label>
                       <div className="flex flex-wrap items-center gap-2">
                         <Input
                           type="date"
@@ -2198,10 +2206,10 @@ export default function Home() {
                           disabled={reminderSubmitting}
                         />
                         <Button type="button" variant="outline" size="sm" onClick={setReminderDateToFirst} disabled={reminderSubmitting}>
-                          月初（1日）
+                          {t("reminder.firstDay")}
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={setReminderDateToLast} disabled={reminderSubmitting}>
-                          月末
+                          {t("reminder.monthEnd")}
                         </Button>
                       </div>
                     </div>
@@ -2215,10 +2223,10 @@ export default function Home() {
                   onClick={() => !reminderSubmitting && setShowReminderModal(false)}
                   disabled={reminderSubmitting}
                 >
-                  キャンセル
+                  {t("app.cancel")}
                 </Button>
                 <Button type="submit" disabled={reminderSubmitting || !reminderTitle.trim()}>
-                  {reminderSubmitting ? "設定中..." : "設定する"}
+                  {reminderSubmitting ? t("reminder.setting") : t("reminder.setButton")}
                 </Button>
               </div>
             </form>
@@ -2237,29 +2245,29 @@ export default function Home() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">リマインド一覧</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowReminderListModal(false)} aria-label="閉じる">
+              <h2 className="text-lg font-semibold">{t("reminder.listTitle")}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowReminderListModal(false)} aria-label={t("app.close")}>
                 ×
               </Button>
             </div>
             <div className="p-4 overflow-auto">
               {reminderTodos.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">リマインド設定付きのTodoはありません。</p>
+                <p className="text-sm text-slate-500 py-4">{t("reminder.noReminders")}</p>
               ) : (
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-2 px-3 font-medium text-foreground">作業名</th>
-                      <th className="text-left py-2 px-3 font-medium text-foreground">リマインド日時</th>
-                      <th className="text-left py-2 px-3 font-medium text-foreground w-20">毎月</th>
-                      <th className="text-right py-2 px-3 font-medium text-foreground w-36">操作</th>
+                      <th className="text-left py-2 px-3 font-medium text-foreground">{t("reminder.taskNameCol")}</th>
+                      <th className="text-left py-2 px-3 font-medium text-foreground">{t("reminder.reminderDateTime")}</th>
+                      <th className="text-left py-2 px-3 font-medium text-foreground w-20">{t("reminder.monthlyCol")}</th>
+                      <th className="text-right py-2 px-3 font-medium text-foreground w-36">{t("reminder.actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reminderTodos.map((t) => (
-                      <tr key={t.id} className="border-b border-border/50 hover:bg-muted/30">
+                    {reminderTodos.map((todo) => (
+                      <tr key={todo.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="py-2 px-3">
-                          {reminderEditId === t.id ? (
+                          {reminderEditId === todo.id ? (
                             <div className="flex items-center gap-2">
                               <Input
                                 value={reminderEditTitle}
@@ -2269,55 +2277,55 @@ export default function Home() {
                                 onKeyDown={(e) => e.key === "Enter" && handleReminderEditSave()}
                               />
                               <Button size="sm" onClick={handleReminderEditSave}>
-                                保存
+                                {t("app.save")}
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => setReminderEditId(null)}>
-                                キャンセル
+                                {t("app.cancel")}
                               </Button>
                             </div>
                           ) : (
-                            <span className="font-medium">{t.text}</span>
+                            <span className="font-medium">{todo.text}</span>
                           )}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">
-                          {t.isMonthlyRecurring
+                          {todo.isMonthlyRecurring
                             ? (() => {
-                                const d = t.reminderDate ? new Date(t.reminderDate + "T12:00:00") : t.date;
+                                const d = todo.reminderDate ? new Date(todo.reminderDate + "T12:00:00") : todo.date;
                                 const day = d.getDate();
                                 const isLast = isSameDay(d, endOfMonth(d));
-                                const dayLabel = isLast ? "月末" : `${day}日`;
-                                const timePart = t.reminderTime != null && t.reminderTime !== "" ? ` ${t.reminderTime}` : "";
-                                return `毎月 ${dayLabel}${timePart}`;
+                                const dayLabel = isLast ? t("reminder.monthEnd") : `${day}${t("reminder.daySuffix")}`;
+                                const timePart = todo.reminderTime != null && todo.reminderTime !== "" ? ` ${todo.reminderTime}` : "";
+                                return `${t("reminder.everyMonth")} ${dayLabel}${timePart}`;
                               })()
-                            : t.reminderTime != null && t.reminderTime !== ""
-                              ? `${format(t.date, "yyyy/MM/dd")} ${t.reminderTime}`
-                              : t.reminderDate != null && t.reminderDate !== ""
-                                ? format(new Date(t.reminderDate + "T12:00:00"), "yyyy/MM/dd")
-                                : format(t.date, "yyyy/MM/dd")}
+                            : todo.reminderTime != null && todo.reminderTime !== ""
+                              ? `${format(todo.date, "P", { locale: dateFnsLocale })} ${todo.reminderTime}`
+                              : todo.reminderDate != null && todo.reminderDate !== ""
+                                ? format(new Date(todo.reminderDate + "T12:00:00"), "P", { locale: dateFnsLocale })
+                                : format(todo.date, "P", { locale: dateFnsLocale })}
                         </td>
-                        <td className="py-2 px-3">{t.isMonthlyRecurring ? "する" : "—"}</td>
+                        <td className="py-2 px-3">{todo.isMonthlyRecurring ? t("reminder.monthlyCol") : "—"}</td>
                         <td className="py-2 px-3 text-right">
-                          {reminderDeleteConfirm?.id === t.id ? (
+                          {reminderDeleteConfirm?.id === todo.id ? (
                             <div className="flex flex-wrap justify-end gap-1">
                               <Button size="sm" variant="destructive" onClick={() => handleReminderDelete("all")}>
-                                削除
+                                {t("reminder.deleteConfirmButton")}
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => setReminderDeleteConfirm(null)}>
-                                キャンセル
+                                {t("app.cancel")}
                               </Button>
                             </div>
                           ) : (
                             <div className="flex justify-end gap-1">
-                              {reminderEditId !== t.id && (
+                              {reminderEditId !== todo.id && (
                                 <>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => {
-                                      setReminderEditId(t.id);
-                                      setReminderEditTitle(t.text);
+                                      setReminderEditId(todo.id);
+                                      setReminderEditTitle(todo.text);
                                     }}
-                                    title="名前変更"
+                                    title={t("reminder.rename")}
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
@@ -2326,11 +2334,11 @@ export default function Home() {
                                     variant="ghost"
                                     className="text-destructive hover:text-destructive"
                                     onClick={() =>
-                                      t.isMonthlyRecurring
-                                        ? setReminderDeleteConfirm({ id: t.id, title: t.text, isMonthly: true })
-                                        : handleReminderDelete("single", t.id)
+                                      todo.isMonthlyRecurring
+                                        ? setReminderDeleteConfirm({ id: todo.id, title: todo.text, isMonthly: true })
+                                        : handleReminderDelete("single", todo.id)
                                     }
-                                    title="削除"
+                                    title={t("reminder.delete")}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -2345,7 +2353,7 @@ export default function Home() {
                 </table>
               )}
               {reminderTodos.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-3">※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます</p>
+                <p className="text-xs text-slate-500 mt-3">{t("reminder.autoRepeatNotice")}</p>
               )}
             </div>
           </div>

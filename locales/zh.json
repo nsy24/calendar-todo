@@ -95,6 +95,9 @@
     "reminderList": "提醒列表"
   },
   "reminder": {
+    "title": "提醒设置",
+    "description": "输入任务名称与提醒方式。",
+    "autoRepeatNotice": "每月提醒的任务在完成后会在下月同日自动创建新任务。",
     "modalTitle": "提醒设置",
     "modalDescription": "输入任务名称与提醒方式。",
     "monthlyNote": "每月提醒的任务在完成后会在下月同日自动创建新任务。",
@@ -108,6 +111,7 @@
     "byTime": "按时间",
     "byDate": "按日期",
     "timeLabel": "时间",
+    "timeLabelOptional": "时间（可选）",
     "dateLabel": "日期",
     "firstDay": "月初（1日）",
     "setting": "设置中...",

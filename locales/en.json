@@ -95,6 +95,9 @@
     "reminderList": "Reminder list"
   },
   "reminder": {
+    "title": "Reminder settings",
+    "description": "Enter task name and how you want to be reminded.",
+    "autoRepeatNotice": "Monthly reminders will auto-create a task on the same day next month when completed.",
     "modalTitle": "Reminder settings",
     "modalDescription": "Enter task name and how you want to be reminded.",
     "monthlyNote": "Monthly reminders will auto-create a task on the same day next month when completed.",
@@ -108,6 +111,7 @@
     "byTime": "By time",
     "byDate": "By date",
     "timeLabel": "Time",
+    "timeLabelOptional": "Time (optional)",
     "dateLabel": "Date",
     "firstDay": "First day",
     "setting": "Setting...",

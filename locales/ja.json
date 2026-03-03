@@ -95,6 +95,9 @@
     "reminderList": "リマインド一覧"
   },
   "reminder": {
+    "title": "リマインド設定",
+    "description": "作業名とリマインド方法を指定してください。",
+    "autoRepeatNotice": "※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます",
     "modalTitle": "リマインド設定",
     "modalDescription": "作業名とリマインド方法を指定してください。",
     "monthlyNote": "※ 毎月リマインドを設定したタスクは、完了すると翌月の同じ日に新しいタスクが自動で作成されます",
@@ -108,6 +111,7 @@
     "byTime": "時間で指定",
     "byDate": "日付で指定",
     "timeLabel": "時刻",
+    "timeLabelOptional": "時刻（任意）",
     "dateLabel": "日付",
     "firstDay": "月初（1日）",
     "setting": "設定中...",

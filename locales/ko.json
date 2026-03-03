@@ -95,6 +95,9 @@
     "reminderList": "리마인더 목록"
   },
   "reminder": {
+    "title": "리마인더 설정",
+    "description": "작업 이름과 리마인더 방법을 지정하세요.",
+    "autoRepeatNotice": "매월 리마인더가 설정된 작업은 완료 시 다음 달 같은 날 새 작업이 자동 생성됩니다.",
     "modalTitle": "리마인더 설정",
     "modalDescription": "작업 이름과 리마인더 방법을 지정하세요.",
     "monthlyNote": "매월 리마인더가 설정된 작업은 완료 시 다음 달 같은 날 새 작업이 자동 생성됩니다.",
@@ -108,6 +111,7 @@
     "byTime": "시간으로 지정",
     "byDate": "날짜로 지정",
     "timeLabel": "시간",
+    "timeLabelOptional": "시간 (선택)",
     "dateLabel": "날짜",
     "firstDay": "월초 (1일)",
     "setting": "설정 중...",
