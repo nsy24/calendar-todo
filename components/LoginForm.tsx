@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -12,6 +13,7 @@ interface LoginFormProps {
 type Mode = "login" | "signup";
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +34,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       }
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+      setError(err instanceof Error ? err.message : t("auth.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -50,18 +52,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         return;
       }
       if (data?.user && !data.user.identities?.length) {
-        setError("このメールアドレスは既に登録されています。");
+        setError(t("auth.emailTaken"));
         return;
       }
-      setSuccessMessage(
-        "アカウントを作成しました。メール確認が有効な場合は、送信されたリンクから確認してください。"
-      );
+      setSuccessMessage(t("auth.signupSuccess"));
       setPassword("");
       if (data?.session) {
         onSuccess?.();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登録に失敗しました");
+      setError(err instanceof Error ? err.message : t("auth.signupFailed"));
     } finally {
       setLoading(false);
     }
@@ -71,19 +71,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const handleSubmit = isLogin ? handleLogin : handleSignUp;
 
   return (
-    <div className="max-w-sm mx-auto mt-8 p-6 border rounded-lg bg-card">
-      <h2 className="text-xl font-semibold mb-4">{isLogin ? "ログイン" : "新規登録"}</h2>
+    <div className="max-w-sm mx-auto mt-8 p-6 border rounded-2xl border-slate-200/80 bg-white shadow-sm">
+      <h2 className="text-xl font-semibold mb-4">{isLogin ? t("auth.login") : t("auth.signup")}</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           type="email"
-          placeholder="メールアドレス"
+          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
         <Input
           type="password"
-          placeholder="パスワード"
+          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -94,14 +94,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <Button type="submit" className="w-full" disabled={loading}>
           {loading
             ? isLogin
-              ? "ログイン中..."
-              : "登録中..."
+              ? t("auth.loginProgress")
+              : t("auth.creatingAccount")
             : isLogin
-              ? "ログイン"
-              : "アカウントを作成"}
+              ? t("auth.login")
+              : t("auth.createAccount")}
         </Button>
       </form>
-      <div className="mt-4 pt-4 border-t">
+      <div className="mt-4 pt-4 border-t border-slate-200">
         <button
           type="button"
           onClick={() => {
@@ -111,11 +111,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           }}
           className="text-sm text-primary hover:underline"
         >
-          {isLogin ? "新規登録はこちら" : "すでにアカウントがある方はログイン"}
+          {isLogin ? t("auth.signupLink") : t("auth.loginLink")}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground mt-4">
-        SyncTaskで、アカウント作成後にあなた専用のユーザー名を設定してタスク管理を始めましょう。
+      <p className="text-xs text-slate-500 mt-4">
+        {t("auth.welcomeMessage")}
       </p>
     </div>
   );

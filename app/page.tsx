@@ -21,13 +21,15 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/lib/supabase";
 import { LoginForm } from "@/components/LoginForm";
+import { AdsCard } from "@/components/AdsCard";
 import { cn } from "@/lib/utils";
 import { validateUsername } from "@/lib/validation";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
 type Priority = "high" | "medium" | "low";
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
-const PRIORITY_LABEL: Record<Priority, string> = { high: "高", medium: "中", low: "低" };
 const PRIORITY_DOT_CLASS: Record<Priority, string> = {
   high: "bg-red-500",
   medium: "bg-amber-500",
@@ -89,37 +91,39 @@ function SortableTodoRow({
   onChangePriority: (id: string, priority: Priority) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
+  const priorityLabel = (p: Priority) => t(`priority.${p}`);
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors border-l-4",
+        "flex items-center gap-3 p-3 rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:bg-slate-50/80 transition-colors border-l-4",
         useUsernameColors && todo.createdByUsername && usernameColorMap?.[todo.createdByUsername]
           ? usernameColorMap[todo.createdByUsername]
-          : "border-l-muted",
-        isDragging && "opacity-95 shadow-xl scale-[1.02] z-50 ring-2 ring-primary/20"
+          : "border-l-slate-200",
+        isDragging && "opacity-95 shadow-md scale-[1.01] z-50 ring-2 ring-slate-300/50"
       )}
     >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1 rounded">
-        <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <GripVertical className="h-4 w-4 text-slate-400" aria-hidden />
       </div>
       <Avatar seed={todoUserSeed} size={32} />
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`優先度: ${PRIORITY_LABEL[todo.priority]}`} />
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_CLASS[todo.priority])} title={`${t("priority.changePriority")}: ${priorityLabel(todo.priority)}`} />
       <Checkbox checked={todo.completed} onChange={() => onToggle(todo.id)} />
-      <span className={`flex-1 ${todo.completed ? "line-through text-muted-foreground" : ""}`}>{todo.text}</span>
+      <span className={cn("flex-1 font-medium text-[15px] text-slate-800", todo.completed && "line-through text-slate-500 font-normal")}>{todo.text}</span>
       <select
         value={todo.priority}
         onChange={(e) => onChangePriority(todo.id, e.target.value as Priority)}
-        className="rounded border bg-background px-2 py-1 text-xs"
-        title="優先度を変更"
+        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600"
+        title={t("priority.changePriority")}
       >
-        <option value="high">高</option>
-        <option value="medium">中</option>
-        <option value="low">低</option>
+        <option value="high">{priorityLabel("high")}</option>
+        <option value="medium">{priorityLabel("medium")}</option>
+        <option value="low">{priorityLabel("low")}</option>
       </select>
       <Button variant="ghost" size="icon" onClick={() => onDelete(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
         <Trash2 className="h-4 w-4" />
@@ -214,6 +218,7 @@ export default function Home() {
   const [usernameEditLoading, setUsernameEditLoading] = useState(false);
   const [usernameEditError, setUsernameEditError] = useState<string | null>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
   const notifiedRef = useRef<Set<string>>(new Set());
   const notifiedReminderRef = useRef<Set<string>>(new Set());
   const todosRef = useRef<Todo[]>([]);
@@ -597,7 +602,7 @@ export default function Home() {
           const isFromMe = who === myUsername;
           const partners = activePartnerUsernamesRef.current;
           const isFromPartner = who && who !== myUsername && partners.includes(who);
-          const priorityLabel = (p: string | undefined) => (p === "high" || p === "medium" || p === "low" ? PRIORITY_LABEL[p] : "中");
+          const priorityLabel = (p: string | undefined) => (p === "high" || p === "medium" || p === "low" ? t(`priority.${p}`) : t("priority.medium"));
           if (isFromMe) {
             fetchTodosRef.current();
             return;
@@ -763,7 +768,7 @@ export default function Home() {
       return;
     }
     setNewPartnerInput("");
-    addToast("共有申請を送りました");
+    addToast(t("toast.shareApplySent"));
     fetchCalendarMembers(currentCalendarId);
   };
 
@@ -775,10 +780,10 @@ export default function Home() {
       .eq("user_id", session!.user.id);
     if (error) {
       console.error("Approve error", error);
-      addToast("承認に失敗しました");
+      addToast(t("toast.shareApproveFailed"));
       return;
     }
-    addToast("共有を承認しました");
+    addToast(t("toast.shareApproved"));
     fetchCalendarMembers(currentCalendarId).then(() => fetchTodos());
   };
 
@@ -786,10 +791,10 @@ export default function Home() {
     const { error } = await supabase.from("calendar_members").delete().eq("id", memberId).eq("user_id", session!.user.id);
     if (error) {
       console.error("Reject error", error);
-      addToast("拒否に失敗しました");
+      addToast(t("toast.shareRejectFailed"));
       return;
     }
-    addToast("申請を拒否しました");
+    addToast(t("toast.shareRejected"));
     fetchCalendarMembers(currentCalendarId);
   };
 
@@ -801,7 +806,7 @@ export default function Home() {
       .eq("user_id", session!.user.id);
     if (error) {
       console.error("Approve invitation error", error);
-      addToast("承認に失敗しました");
+      addToast(t("toast.shareApproveFailed"));
       return;
     }
     addToast(`${invitation.calendar_name} に参加しました`);
@@ -814,10 +819,10 @@ export default function Home() {
     const { error } = await supabase.from("calendar_members").delete().eq("id", invitationId).eq("user_id", session!.user.id);
     if (error) {
       console.error("Reject invitation error", error);
-      addToast("拒否に失敗しました");
+      addToast(t("toast.shareRejectFailed"));
       return;
     }
-    addToast("招待を拒否しました");
+    addToast(t("toast.inviteRejected"));
     fetchReceivedInvitations();
   };
 
@@ -825,10 +830,10 @@ export default function Home() {
     const { error } = await supabase.from("calendar_members").delete().eq("id", memberId);
     if (error) {
       console.error("Unshare error", error);
-      addToast("解除に失敗しました");
+      addToast(t("toast.unshareFailed"));
       return;
     }
-    addToast("共有を解除しました");
+    addToast(t("toast.unshared"));
     fetchCalendarMembers(currentCalendarId).then(() => fetchTodos());
   };
 
@@ -948,7 +953,7 @@ export default function Home() {
       });
     });
     const text = lines.join("\n");
-    navigator.clipboard.writeText(text).then(() => addToast("報告用テキストをコピーしました"), () => addToast("コピーに失敗しました"));
+    navigator.clipboard.writeText(text).then(() => addToast(t("toast.reportCopied")), () => addToast(t("toast.copyFailed")));
   }, [weeklyReport, addToast]);
 
   // 予定に2人以上のユーザーが含まれるときだけ色分けする
@@ -990,7 +995,7 @@ export default function Home() {
       return;
     }
     if (!currentCalendarId) {
-      addToast("カレンダーを選択してください");
+      addToast(t("toast.selectCalendar"));
       return;
     }
     const title = newTodoText.trim();
@@ -1048,7 +1053,7 @@ export default function Home() {
     }
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, priority } : t)));
     const actor = profile?.username?.trim() || "自分";
-    await insertNotificationLog(`${actor}がタスク「${target.text}」の優先度を${PRIORITY_LABEL[priority]}に変更しました`);
+    await insertNotificationLog(`${actor}がタスク「${target.text}」の優先度を${t(`priority.${priority}`)}に変更しました`);
   };
 
   const handleToggleTodo = async (id: string) => {
@@ -1161,7 +1166,7 @@ export default function Home() {
     const title = reminderTitle.trim();
     if (!title) return;
     if (!session?.user?.id || !currentCalendarId) {
-      addToast("カレンダーを選択してください");
+      addToast(t("toast.selectCalendar"));
       return;
     }
     setReminderSubmitting(true);
@@ -1206,12 +1211,12 @@ export default function Home() {
     setReminderSubmitting(false);
     if (error) {
       console.error("Reminder todo insert error", error);
-      addToast("リマインドの追加に失敗しました");
+      addToast(t("reminder.reminderAddFailed"));
       return;
     }
     setShowReminderModal(false);
     fetchTodos();
-    addToast("リマインドを設定しました");
+    addToast(t("reminder.reminderSet"));
   };
 
   const setReminderDateToFirst = () => {
@@ -1229,13 +1234,13 @@ export default function Home() {
     const { error } = await supabase.from("todos").update({ title: reminderEditTitle.trim() }).eq("id", reminderEditId);
     if (error) {
       console.error("Reminder title update error", error);
-      addToast("名前の変更に失敗しました");
+      addToast(t("toast.reminderRenameFailed"));
       return;
     }
     setReminderEditId(null);
     setReminderEditTitle("");
     fetchTodos();
-    addToast("名前を変更しました");
+    addToast(t("toast.reminderRenamed"));
   };
 
   const handleReminderDelete = async (mode: "single" | "all", optionalId?: string) => {
@@ -1247,10 +1252,10 @@ export default function Home() {
       const { error } = await supabase.from("todos").delete().eq("id", idToDelete);
       if (error) {
         console.error("Delete todo error", error);
-        addToast("削除に失敗しました");
+        addToast(t("toast.reminderDeleteFailed"));
         return;
       }
-      addToast("1件削除しました");
+      addToast(t("toast.reminderDeleted"));
     } else {
       const todo = todos.find((t) => t.id === target!.id);
       if (!todo) return;
@@ -1265,7 +1270,7 @@ export default function Home() {
       const { error } = await supabase.from("todos").delete().in("id", ids);
       if (error) {
         console.error("Bulk delete error", error);
-        addToast("一括削除に失敗しました");
+        addToast(t("toast.reminderBulkDeleteFailed"));
         return;
       }
       addToast(`この作業のリマインドを${ids.length}件削除しました`);
@@ -1288,7 +1293,7 @@ export default function Home() {
       setUsernameEditValue("");
       setUsernameEditError(null);
       setShowSettingsDropdown(false);
-      addToast("変更がありません");
+      addToast(t("username.noChange"));
       return;
     }
     setUsernameEditError(null);
@@ -1310,7 +1315,7 @@ export default function Home() {
     setUsernameEditValue("");
     setUsernameEditLoading(false);
     setShowSettingsDropdown(false);
-    addToast("ユーザー名を変更しました");
+    addToast(t("username.changed"));
   };
 
   const handleRenameCalendar = async (e: React.FormEvent) => {
@@ -1339,7 +1344,7 @@ export default function Home() {
     setRenameCalendarValue("");
     setRenameCalendarLoading(false);
     setShowSettingsDropdown(false);
-    addToast("カレンダー名を変更しました");
+    addToast(t("calendar.renamed"));
   };
 
   const handleDeleteAccount = async () => {
@@ -1350,14 +1355,14 @@ export default function Home() {
       const { error: todosErr } = await supabase.from("todos").delete().eq("user_id", uid);
       if (todosErr) {
         console.error("Failed to delete todos", todosErr);
-        addToast("データの削除に失敗しました");
+        addToast(t("settings.deleteFailed"));
         setDeleteAccountLoading(false);
         return;
       }
       const { error: membersErr } = await supabase.from("calendar_members").delete().eq("user_id", uid);
       if (membersErr) {
         console.error("Failed to delete calendar_members", membersErr);
-        addToast("データの削除に失敗しました");
+        addToast(t("settings.deleteFailed"));
         setDeleteAccountLoading(false);
         return;
       }
@@ -1370,14 +1375,14 @@ export default function Home() {
       const { error: profileErr } = await supabase.from("profiles").delete().eq("id", uid);
       if (profileErr) {
         console.error("Failed to delete profile", profileErr);
-        addToast("データの削除に失敗しました");
+        addToast(t("settings.deleteFailed"));
         setDeleteAccountLoading(false);
         return;
       }
       setShowDeleteAccountConfirm(false);
       setShowSettingsDropdown(false);
       await supabase.auth.signOut();
-      addToast("アカウントを削除しました");
+      addToast(t("settings.accountDeleted"));
     } finally {
       setDeleteAccountLoading(false);
     }
@@ -1390,16 +1395,16 @@ export default function Home() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">読み込み中...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500">{t("app.loading")}</p>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-background p-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-center mb-2">SyncTask</h1>
+      <div className="min-h-screen bg-slate-50 p-4">
+        <h1 className="text-2xl font-extrabold tracking-tight text-center mb-2">{t("app.title")}</h1>
         <LoginForm />
       </div>
     );
@@ -1407,8 +1412,8 @@ export default function Home() {
 
   if (profileLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">読み込み中...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500">{t("app.loading")}</p>
       </div>
     );
   }
@@ -1481,7 +1486,7 @@ export default function Home() {
     setNewCalendarName("");
     setShowCreateCalendarModal(false);
     setCreateCalendarLoading(false);
-    addToast("カレンダーを作成しました");
+    addToast(t("toast.calendarCreated"));
   };
 
   const handleRandomAvatar = async () => {
@@ -1490,30 +1495,30 @@ export default function Home() {
     const { error } = await supabase.from("profiles").update({ avatar_seed: seed }).eq("id", session.user.id);
     if (error) {
       console.error("Failed to update avatar_seed", error);
-      addToast("アバターの更新に失敗しました");
+      addToast(t("toast.avatarUpdateFailed"));
       return;
     }
     await fetchProfile();
     await fetchTodos();
-    addToast("アバターを更新しました");
+    addToast(t("settings.avatarUpdated"));
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 relative">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-extrabold shrink-0 tracking-tight text-foreground">SyncTask</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold shrink-0 tracking-tight text-slate-900">{t("app.title")}</h1>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-lg text-muted-foreground" aria-hidden>📅</span>
               <select
                 value={currentCalendarId ?? ""}
                 onChange={(e) => setCurrentCalendarId(e.target.value || null)}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium min-w-[180px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                aria-label="表示するカレンダーを選択"
+                aria-label={t("calendar.selectPlaceholder")}
               >
                 {calendarsList.length === 0 ? (
-                  <option value="">{calendarsLoading ? "同期中..." : "マイカレンダー（個人用）"}</option>
+                  <option value="">{calendarsLoading ? t("calendar.syncing") : t("calendar.myCalendar")}</option>
                 ) : (
                   calendarsList.map((cal) => (
                     <option key={cal.id} value={cal.id}>
@@ -1532,10 +1537,10 @@ export default function Home() {
                   setShowCreateCalendarModal(true);
                 }}
                 className="shrink-0"
-                title="ワークスペースを作成"
+                title={t("calendar.workspaceCreate")}
               >
                 <Plus className="h-4 w-4 mr-1" />
-                新規作成
+                {t("calendar.createNew")}
               </Button>
             </div>
           </div>
@@ -1555,9 +1560,9 @@ export default function Home() {
                 );
               })}
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowReminderListModal(true)} title="リマインド一覧">
+            <Button variant="outline" size="sm" onClick={() => setShowReminderListModal(true)} title={t("todo.reminderList")}>
               <List className="h-4 w-4 mr-1" />
-              リマインド一覧
+              {t("todo.reminderList")}
             </Button>
             {typeof window !== "undefined" && "Notification" in window && notificationPermission === "default" && (
               <Button
@@ -1576,34 +1581,54 @@ export default function Home() {
                 className="flex items-center gap-1.5"
                 aria-haspopup="true"
                 aria-expanded={showSettingsDropdown}
-                aria-label="設定メニュー"
+                aria-label={t("settings.menu")}
               >
                 <Avatar seed={(profile?.avatar_seed?.trim() || profile?.username || "default") as string} size={24} />
                 <ChevronDown className={cn("h-4 w-4 transition-transform", showSettingsDropdown && "rotate-180")} />
               </Button>
               {showSettingsDropdown && (
                 <div
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-md border bg-card shadow-lg py-1"
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-2xl border border-slate-200/80 bg-white shadow-sm py-1"
                   role="menu"
                 >
                   <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/50">
-                    <span className="text-sm text-muted-foreground truncate" title={profile?.username ?? "（未設定）"}>
-                      {profile?.username?.trim() || "（未設定）"}
+                    <span className="text-sm text-slate-500 truncate" title={profile?.username ?? t("app.unset")}>
+                      {profile?.username?.trim() || t("app.unset")}
                     </span>
                     <button
                       type="button"
-                      className="shrink-0 p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                      className="shrink-0 p-1 rounded hover:bg-accent text-slate-500 hover:text-foreground"
                       onClick={() => {
                         setUsernameEditValue(profile?.username?.trim() ?? "");
                         setUsernameEditError(null);
                         setShowUsernameEditModal(true);
                         setShowSettingsDropdown(false);
                       }}
-                      title="ユーザー名を変更"
-                      aria-label="ユーザー名を変更"
+                      title={t("username.editTitle")}
+                      aria-label={t("username.editTitle")}
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/50">
+                    <span className="text-xs text-slate-500 shrink-0">Lang:</span>
+                    {(["ja", "en", "zh", "ko"] as const).map((lng) => (
+                      <button
+                        key={lng}
+                        type="button"
+                        onClick={() => {
+                          i18n.changeLanguage(lng);
+                          if (typeof window !== "undefined") window.localStorage.setItem("syncTask_lang", lng);
+                          setShowSettingsDropdown(false);
+                        }}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-xs font-medium transition-colors",
+                          i18n.language === lng ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-100"
+                        )}
+                      >
+                        {lng === "ja" ? "JA" : lng === "en" ? "EN" : lng === "zh" ? "简" : "KO"}
+                      </button>
+                    ))}
                   </div>
                   <button
                     type="button"
@@ -1615,7 +1640,7 @@ export default function Home() {
                     }}
                   >
                     <RefreshCw className="h-4 w-4 shrink-0" />
-                    アバターをランダム生成
+                    {t("settings.randomAvatar")}
                   </button>
                   <button
                     type="button"
@@ -1631,7 +1656,7 @@ export default function Home() {
                     }}
                   >
                     <Pencil className="h-4 w-4 shrink-0" />
-                    カレンダー名変更
+                    {t("settings.renameCalendar")}
                   </button>
                   <button
                     type="button"
@@ -1643,7 +1668,7 @@ export default function Home() {
                     }}
                   >
                     <Trash2 className="h-4 w-4 shrink-0" />
-                    アカウント削除
+                    {t("settings.deleteAccount")}
                   </button>
                   <button
                     type="button"
@@ -1652,7 +1677,7 @@ export default function Home() {
                     onClick={() => handleLogout()}
                   >
                     <LogOut className="h-4 w-4 shrink-0" />
-                    ログアウト
+                    {t("settings.logout")}
                   </button>
                 </div>
               )}
@@ -1660,21 +1685,21 @@ export default function Home() {
           </div>
         </div>
         {calendarsLoading && !currentCalendarId && !calendarsReconnecting && (
-          <p className="text-sm text-muted-foreground mb-4">同期中...</p>
+          <p className="text-sm text-slate-500 mb-4">{t("calendar.syncing")}</p>
         )}
         {calendarsReconnecting && (
-          <p className="text-sm text-muted-foreground mb-4">再接続中...</p>
+          <p className="text-sm text-slate-500 mb-4">{t("calendar.reconnecting")}</p>
         )}
         {calendarsAutoCreating && (
-          <p className="text-sm text-muted-foreground mb-4">初期設定を行っています...</p>
+          <p className="text-sm text-slate-500 mb-4">{t("calendar.initializing")}</p>
         )}
         {!calendarsLoading && !calendarsReconnecting && !calendarsAutoCreating && calendarsList.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-4">ワークスペースを同期中、または未作成です。</p>
+          <p className="text-sm text-slate-500 mb-4">{t("calendar.noWorkspace")}</p>
         )}
         {receivedInvitations.length > 0 && (
           <Card className="mb-4">
             <CardHeader className="py-3">
-              <CardTitle className="text-base">あなたへの招待</CardTitle>
+              <CardTitle className="text-base">{t("invitations.title")}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <ul className="space-y-2">
@@ -1682,14 +1707,14 @@ export default function Home() {
                   <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2">
                     <span className="text-sm">
                       <span className="font-medium">{inv.calendar_name}</span>
-                      <span className="text-muted-foreground"> — {inv.invited_by_username}さんから招待</span>
+                      <span className="text-slate-500"> — {t("invitations.invitedBy", { name: inv.invited_by_username })}</span>
                     </span>
                     <div className="flex items-center gap-1">
                       <Button size="sm" onClick={() => handleApproveReceivedInvitation(inv)}>
-                        承認
+                        {t("invitations.approve")}
                       </Button>
                       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleRejectReceivedInvitation(inv.id)}>
-                        拒否
+                        {t("invitations.reject")}
                       </Button>
                     </div>
                   </li>
@@ -1702,13 +1727,13 @@ export default function Home() {
           <CardHeader className="py-4">
             <CardTitle className="text-base flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              共有申請・仲間
+              {t("share.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-4">
             <form onSubmit={handleApply} className="flex gap-2 flex-wrap items-center">
               <Input
-                placeholder="チームメンバーのユーザー名を入力（半角英数字・. _ -）"
+                placeholder={t("share.placeholder")}
                 value={newPartnerInput}
                 onChange={(e) => {
                   setNewPartnerInput(e.target.value);
@@ -1717,26 +1742,26 @@ export default function Home() {
                 className="max-w-xs"
               />
               <Button type="submit" disabled={addPartnerLoading}>
-                {addPartnerLoading ? "送信中..." : "申請を送る"}
+                {addPartnerLoading ? t("share.sending") : t("share.send")}
               </Button>
             </form>
             {addPartnerError && <p className="text-sm text-destructive">{addPartnerError}</p>}
             {pendingRequests.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">申請が届いています</p>
+                <p className="text-sm font-medium text-slate-500">{t("share.pending")}</p>
                 <ul className="space-y-1">
                   {pendingRequests.map((req) => (
                     <li key={req.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
                       <span className="flex items-center gap-2 text-sm">
                         <Avatar seed={req.applicant_username} size={32} />
-                        {req.applicant_username}さんから共有申請
+                        {t("share.sharedBy", { name: req.applicant_username })}
                       </span>
                       <div className="flex items-center gap-1">
                         <Button size="sm" onClick={() => handleApprove(req.id)}>
-                          承認する
+                          {t("share.approveButton")}
                         </Button>
                         <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleReject(req.id)}>
-                          拒否
+                          {t("invitations.reject")}
                         </Button>
                       </div>
                     </li>
@@ -1746,7 +1771,7 @@ export default function Home() {
             )}
             {activePartners.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">このワークスペースにチームメンバーを招待します</p>
+                <p className="text-sm font-medium text-slate-500">{t("share.inviteHint")}</p>
                 <ul className="space-y-1">
                   {activePartners.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2 rounded border px-3 py-2">
@@ -1754,9 +1779,9 @@ export default function Home() {
                         <Avatar seed={getAvatarSeedForUsername(p.partner_username)} size={32} />
                         {p.partner_username}
                       </span>
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleUnshare(p.id)}>
-                        解除
-                      </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleUnshare(p.id)}>
+                          {t("share.unshare")}
+                        </Button>
                     </li>
                   ))}
                 </ul>
@@ -1767,14 +1792,14 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle>カレンダー</CardTitle>
+              <CardTitle>{t("calendar.label")}</CardTitle>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => setShowNotifications(true)} title="お知らせ">
+                <Button variant="ghost" size="icon" onClick={() => setShowNotifications(true)} title={t("notifications.notifyLabel")}>
                   <Bell className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setShowWeeklyReport(true)}>
                   <FileText className="h-4 w-4 mr-1" />
-                  週の振り返り
+                  {t("weeklyReport.button")}
                 </Button>
               </div>
             </CardHeader>
@@ -1784,7 +1809,7 @@ export default function Home() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{format(selectedDate, "yyyy年M月d日")} のTodo</CardTitle>
+              <CardTitle>{format(selectedDate, "yyyy年M月d日")}{t("todo.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -1795,15 +1820,15 @@ export default function Home() {
                     <span key={member.id} className="flex items-center gap-1.5">
                       <Avatar seed={seed} size={32} />
                       <span>
-                        {member.username || "（未設定）"}
-                        {isSelf && <span className="ml-1 text-xs">(自分)</span>}
+                        {member.username || t("app.unset")}
+                        {isSelf && <span className="ml-1 text-xs">({t("app.self")})</span>}
                       </span>
                     </span>
                   );
                 })}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Input placeholder="新しいTodoを追加..." value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1 min-w-[200px]" />
+                <Input placeholder={t("todo.addPlaceholder")} value={newTodoText} onChange={(e) => setNewTodoText(e.target.value)} onKeyPress={handleKeyPress} className="flex-1 min-w-[200px]" />
                 <div className="flex items-center gap-1" role="group" aria-label="優先度">
                   {(["high", "medium", "low"] as const).map((p) => (
                     <button
@@ -1821,36 +1846,59 @@ export default function Home() {
                           : "bg-muted text-muted-foreground hover:bg-muted/80"
                       )}
                     >
-                      {PRIORITY_LABEL[p]}
+                      {t(`priority.${p}`)}
                     </button>
                   ))}
                 </div>
-                <Button onClick={handleSubmit} size="icon" title="追加">
+                <Button onClick={handleSubmit} size="icon" title={t("app.add")}>
                   <Plus className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={openReminderModal} className="shrink-0" title="リマインド設定">
+                <Button type="button" variant="outline" size="sm" onClick={openReminderModal} className="shrink-0" title={t("todo.reminderSetting")}>
                   <Clock className="h-4 w-4 mr-1" />
-                  リマインド設定
+                  {t("todo.reminderSetting")}
                 </Button>
               </div>
               <div className="space-y-2">
                 {selectedDateTodos.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">この日にはTodoがありません</p>
+                  <p className="text-slate-500 text-center py-8 text-sm">{t("todo.empty")}</p>
                 ) : (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={selectedDateTodos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                      {selectedDateTodos.map((todo) => (
-                        <SortableTodoRow
-                          key={todo.id}
-                          todo={todo}
-                          useUsernameColors={useUsernameColors}
-                          usernameColorMap={usernameColorMap}
-                          getAvatarSeedForUsername={getAvatarSeedForUsername}
-                          onToggle={handleToggleTodo}
-                          onChangePriority={handleChangePriority}
-                          onDelete={handleDeleteTodo}
-                        />
-                      ))}
+                      {(() => {
+                        const list = selectedDateTodos;
+                        const adIndex = list.length >= 3 ? Math.floor(list.length / 2) : -1;
+                        const first = adIndex >= 0 ? list.slice(0, adIndex) : list;
+                        const second = adIndex >= 0 ? list.slice(adIndex) : [];
+                        return (
+                          <>
+                            {first.map((todo) => (
+                              <SortableTodoRow
+                                key={todo.id}
+                                todo={todo}
+                                useUsernameColors={useUsernameColors}
+                                usernameColorMap={usernameColorMap}
+                                getAvatarSeedForUsername={getAvatarSeedForUsername}
+                                onToggle={handleToggleTodo}
+                                onChangePriority={handleChangePriority}
+                                onDelete={handleDeleteTodo}
+                              />
+                            ))}
+                            {adIndex >= 0 && <AdsCard className="my-2" />}
+                            {second.map((todo) => (
+                              <SortableTodoRow
+                                key={todo.id}
+                                todo={todo}
+                                useUsernameColors={useUsernameColors}
+                                usernameColorMap={usernameColorMap}
+                                getAvatarSeedForUsername={getAvatarSeedForUsername}
+                                onToggle={handleToggleTodo}
+                                onChangePriority={handleChangePriority}
+                                onDelete={handleDeleteTodo}
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
                     </SortableContext>
                   </DndContext>
                 )}
@@ -1865,15 +1913,15 @@ export default function Home() {
           onClick={() => !createCalendarLoading && setShowCreateCalendarModal(false)}
         >
           <div
-            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            className="bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-md w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-1">ワークスペースを作成</h2>
-            <p className="text-sm text-muted-foreground mb-3">プロジェクト用・チーム共有用のワークスペースです。作成後にメンバーを招待できます。</p>
+            <h2 className="text-lg font-semibold mb-1">{t("calendar.createTitle")}</h2>
+            <p className="text-sm text-slate-500 mb-3">{t("calendar.createDescription")}</p>
             <form onSubmit={handleCreateCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="第1プロジェクト、営業1課 共有用 など"
+                placeholder={t("calendar.createPlaceholder")}
                 value={newCalendarName}
                 onChange={(e) => {
                   setNewCalendarName(e.target.value);
@@ -1892,10 +1940,10 @@ export default function Home() {
                   onClick={() => !createCalendarLoading && setShowCreateCalendarModal(false)}
                   disabled={createCalendarLoading}
                 >
-                  キャンセル
+                  {t("app.cancel")}
                 </Button>
                 <Button type="submit" disabled={createCalendarLoading}>
-                  {createCalendarLoading ? "作成中..." : "作成する"}
+                  {createCalendarLoading ? t("calendar.creating") : t("calendar.createButton")}
                 </Button>
               </div>
             </form>
@@ -1908,15 +1956,15 @@ export default function Home() {
           onClick={() => !usernameEditLoading && setShowUsernameEditModal(false)}
         >
           <div
-            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            className="bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-md w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-1">ユーザー名を変更</h2>
-            <p className="text-sm text-muted-foreground mb-3">半角英数字と記号（. _ -）が使えます。2〜50文字。</p>
+            <h2 className="text-lg font-semibold mb-1">{t("username.editTitle")}</h2>
+            <p className="text-sm text-slate-500 mb-3">{t("username.editDescription")}</p>
             <form onSubmit={handleSaveUsername} className="space-y-3">
               <Input
                 type="text"
-                placeholder="ユーザー名"
+                placeholder={t("username.placeholder")}
                 value={usernameEditValue}
                 onChange={(e) => {
                   setUsernameEditValue(e.target.value);
@@ -1935,10 +1983,10 @@ export default function Home() {
                   onClick={() => !usernameEditLoading && setShowUsernameEditModal(false)}
                   disabled={usernameEditLoading}
                 >
-                  キャンセル
+                  {t("app.cancel")}
                 </Button>
                 <Button type="submit" disabled={usernameEditLoading}>
-                  {usernameEditLoading ? "保存中..." : "保存する"}
+                  {usernameEditLoading ? t("app.saving") : t("app.saveButton")}
                 </Button>
               </div>
             </form>
@@ -1951,15 +1999,15 @@ export default function Home() {
           onClick={() => !renameCalendarLoading && setShowRenameCalendarModal(false)}
         >
           <div
-            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-4"
+            className="bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-md w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-1">カレンダー名を変更</h2>
-            <p className="text-sm text-muted-foreground mb-3">現在表示中のカレンダー名を編集できます。</p>
+            <h2 className="text-lg font-semibold mb-1">{t("calendar.renameTitle")}</h2>
+            <p className="text-sm text-slate-500 mb-3">{t("calendar.renameDescription")}</p>
             <form onSubmit={handleRenameCalendar} className="space-y-3">
               <Input
                 type="text"
-                placeholder="カレンダー名"
+                placeholder={t("calendar.renamePlaceholder")}
                 value={renameCalendarValue}
                 onChange={(e) => {
                   setRenameCalendarValue(e.target.value);
@@ -1978,10 +2026,10 @@ export default function Home() {
                   onClick={() => !renameCalendarLoading && setShowRenameCalendarModal(false)}
                   disabled={renameCalendarLoading}
                 >
-                  キャンセル
+                  {t("app.cancel")}
                 </Button>
                 <Button type="submit" disabled={renameCalendarLoading}>
-                  {renameCalendarLoading ? "保存中..." : "保存する"}
+                  {renameCalendarLoading ? t("app.saving") : t("app.saveButton")}
                 </Button>
               </div>
             </form>
@@ -1994,12 +2042,12 @@ export default function Home() {
           onClick={() => !deleteAccountLoading && setShowDeleteAccountConfirm(false)}
         >
           <div
-            className="bg-card border rounded-lg shadow-lg max-w-md w-full p-5"
+            className="bg-white border border-slate-200/80 rounded-2xl shadow-sm max-w-md w-full p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-destructive mb-1">アカウントを削除しますか？</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              データをすべて削除して退会します。この操作は取り消せません。本当に退会しますか？
+            <h2 className="text-lg font-semibold text-destructive mb-1">{t("settings.deleteAccountTitle")}</h2>
+            <p className="text-sm text-slate-500 mb-4">
+              {t("settings.deleteAccountDescription")}
             </p>
             <div className="flex justify-end gap-2">
               <Button
@@ -2008,7 +2056,7 @@ export default function Home() {
                 onClick={() => !deleteAccountLoading && setShowDeleteAccountConfirm(false)}
                 disabled={deleteAccountLoading}
               >
-                キャンセル
+                {t("app.cancel")}
               </Button>
               <Button
                 type="button"
@@ -2016,7 +2064,7 @@ export default function Home() {
                 onClick={handleDeleteAccount}
                 disabled={deleteAccountLoading}
               >
-                {deleteAccountLoading ? "削除中..." : "データをすべて削除して退会する"}
+                {deleteAccountLoading ? t("settings.deleting") : t("settings.deleteAccountButton")}
               </Button>
             </div>
           </div>
@@ -2410,6 +2458,7 @@ function SetUsernameScreen({
   profile: Profile | null;
   onSuccess: () => void;
 }) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2428,43 +2477,43 @@ function SetUsernameScreen({
       if (profile) {
         const { error: err } = await supabase.from("profiles").update({ username: value }).eq("id", session.user.id);
         if (err) {
-          if (err.code === "23505") setError("このユーザー名は既に使われています");
+          if (err.code === "23505") setError(t("username.duplicate"));
           else setError(err.message);
           return;
         }
       } else {
         const { error: err } = await supabase.from("profiles").insert({ id: session.user.id, username: value }).select();
         if (err) {
-          if (err.code === "23505") setError("このユーザー名は既に使われています");
+          if (err.code === "23505") setError(t("username.duplicate"));
           else setError(err.message);
           return;
         }
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "設定に失敗しました");
+      setError(err instanceof Error ? err.message : t("username.setFailed"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-sm w-full p-6 border rounded-lg bg-card">
-        <h2 className="text-xl font-semibold mb-2">ユーザー名を設定</h2>
-        <p className="text-sm text-muted-foreground mb-4">他の人と共有するときに表示されます。一度設定すると変更できます。</p>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="max-w-sm w-full p-6 border rounded-2xl border-slate-200/80 bg-white shadow-sm">
+        <h2 className="text-xl font-semibold mb-2">{t("username.setTitle")}</h2>
+        <p className="text-sm text-slate-500 mb-4">{t("username.setDescription")}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            placeholder="半角英数字・記号（. _ -）2〜50文字"
+            placeholder={t("username.placeholder")}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             minLength={2}
             maxLength={50}
           />
-        <p className="text-xs text-muted-foreground">半角英数字と記号（. _ -）のみ使用できます</p>
+        <p className="text-xs text-slate-500">{t("username.hint")}</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "設定中..." : "設定する"}
+            {loading ? t("username.setting") : t("username.setButton")}
           </Button>
         </form>
       </div>
