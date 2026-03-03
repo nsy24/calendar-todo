@@ -31,11 +31,23 @@ async function translateWithDeepL(
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`DeepL API error: ${res.status} ${err}`);
+    const msg = `DeepL API error: ${res.status} ${err}`;
+    console.error("[translate] DeepL request failed", {
+      status: res.status,
+      statusText: res.statusText,
+      body: err,
+      targetLang,
+      sourceLang,
+      textLength: text.length,
+    });
+    throw new Error(msg);
   }
   const data = await res.json();
   const translated = data.translations?.[0]?.text;
-  if (typeof translated !== "string") throw new Error("DeepL invalid response");
+  if (typeof translated !== "string") {
+    console.error("[translate] DeepL invalid response shape", { data, targetLang, sourceLang });
+    throw new Error("DeepL invalid response");
+  }
   return translated;
 }
 
@@ -62,11 +74,22 @@ async function translateWithGoogle(
   });
   if (!res.ok) {
     const err = await res.text();
+    console.error("[translate] Google Translate request failed", {
+      status: res.status,
+      statusText: res.statusText,
+      body: err,
+      targetLang,
+      sourceLang,
+      textLength: text.length,
+    });
     throw new Error(`Google Translate API error: ${res.status} ${err}`);
   }
   const data = await res.json();
   const translated = data?.data?.translations?.[0]?.translatedText;
-  if (typeof translated !== "string") throw new Error("Google Translate invalid response");
+  if (typeof translated !== "string") {
+    console.error("[translate] Google Translate invalid response shape", { data, targetLang, sourceLang });
+    throw new Error("Google Translate invalid response");
+  }
   return translated;
 }
 
@@ -101,14 +124,28 @@ export async function POST(request: NextRequest) {
         try {
           translations[lang] = await translateWithDeepL(text, lang, sourceLang, deeplKey, deeplUrl);
         } catch (e) {
-          console.error("DeepL translate error", e);
+          const err = e instanceof Error ? e : new Error(String(e));
+          console.error("[translate] DeepL translate error", {
+            message: err.message,
+            stack: err.stack,
+            lang,
+            sourceLang,
+            textPreview: text.slice(0, 80),
+          });
           translations[lang] = text;
         }
       } else if (googleKey) {
         try {
           translations[lang] = await translateWithGoogle(text, lang, sourceLang, googleKey);
         } catch (e) {
-          console.error("Google Translate error", e);
+          const err = e instanceof Error ? e : new Error(String(e));
+          console.error("[translate] Google Translate error", {
+            message: err.message,
+            stack: err.stack,
+            lang,
+            sourceLang,
+            textPreview: text.slice(0, 80),
+          });
           translations[lang] = text;
         }
       } else {
@@ -118,7 +155,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ translations });
   } catch (e) {
-    console.error("Translate API error", e);
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error("[translate] API unexpected error", {
+      message: err.message,
+      stack: err.stack,
+      name: err instanceof Error ? err.name : undefined,
+    });
     return NextResponse.json({ error: "Translation failed" }, { status: 500 });
   }
 }

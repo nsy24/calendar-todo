@@ -100,8 +100,13 @@ function SortableTodoRow({
   const style = { transform: CSS.Transform.toString(transform), transition };
   const todoUserSeed = getAvatarSeedForUsername(todo.createdByUsername ?? "");
   const priorityLabel = (p: Priority) => t(`priority.${p}`);
-  const displayText = (todo.translations && todo.translations[i18n.language]) || todo.text;
-  const showOriginalTip = Boolean(todo.translations);
+  const lang = (() => {
+    const raw = (i18n.language || "").split("-")[0].toLowerCase();
+    return raw === "ja" || raw === "en" || raw === "zh" || raw === "ko" ? raw : "en";
+  })();
+  const translated = todo.translations?.[lang];
+  const displayText = (translated && translated.trim() !== "" ? translated : todo.text) || "";
+  const showOriginalTip = Boolean(todo.translations && displayText !== todo.text);
   return (
     <div
       ref={setNodeRef}
@@ -1020,6 +1025,7 @@ export default function Home() {
     const title = newTodoText.trim();
     const date = format(selectedDate, "yyyy-MM-dd");
     try {
+      const trans = await translateTaskTitle(title);
       const { data, error } = await supabase
         .from("todos")
         .insert([
@@ -1031,6 +1037,7 @@ export default function Home() {
             created_by_username: profile.username.trim(),
             priority: newTodoPriority,
             position: 0,
+            ...(trans && { translations: trans }),
           },
         ])
         .select();
@@ -1050,13 +1057,6 @@ export default function Home() {
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("Todoを追加しました", { body: title });
         }
-        (async () => {
-          const trans = await translateTaskTitle(title);
-          if (trans && data[0]?.id) {
-            await supabase.from("todos").update({ translations: trans }).eq("id", data[0].id);
-            fetchTodos();
-          }
-        })();
       } else {
         fetchTodos();
       }
@@ -1104,7 +1104,8 @@ export default function Home() {
       const nextDateStr = format(isLastDay ? endOfMonth(nextMonthDate) : nextMonthDate, "yyyy-MM-dd");
       const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
       const nextUserId = target.userId ?? session.user.id;
-      const { data: inserted } = await supabase.from("todos").insert([
+      const trans = await translateTaskTitle(target.text);
+      await supabase.from("todos").insert([
         {
           title: target.text,
           date: nextDateStr,
@@ -1116,12 +1117,9 @@ export default function Home() {
           is_monthly_recurring: true,
           reminder_time: reminderTimeVal,
           reminder_date: target.reminderDate ?? nextDateStr,
+          ...(trans && { translations: trans }),
         },
-      ]).select("id");
-      if (inserted?.[0]?.id) {
-        const trans = await translateTaskTitle(target.text);
-        if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", inserted[0].id);
-      }
+      ]);
       fetchTodos();
     }
   };
@@ -1208,6 +1206,7 @@ export default function Home() {
       const firstDate = getNextOccurrenceOfDay(reminderDayOfMonth, now);
       const isLastDayOfMonth = reminderDayOfMonth <= 0 || firstDate.getDate() === endOfMonth(firstDate).getDate();
       const dateStr = format(isLastDayOfMonth ? endOfMonth(firstDate) : firstDate, "yyyy-MM-dd");
+      const trans = await translateTaskTitle(title);
       rowsToInsert.push({
         title,
         date: dateStr,
@@ -1219,10 +1218,12 @@ export default function Home() {
         is_monthly_recurring: true,
         reminder_time: reminderTimeVal,
         reminder_date: dateStr,
+        ...(trans && { translations: trans }),
       });
     } else {
       const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
       const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : taskDateStr;
+      const trans = await translateTaskTitle(title);
       rowsToInsert.push({
         title,
         date: taskDateStr,
@@ -1234,10 +1235,11 @@ export default function Home() {
         is_monthly_recurring: false,
         reminder_time: reminderTimeVal,
         reminder_date: reminderDateVal,
+        ...(trans && { translations: trans }),
       });
     }
 
-    const { data: insertedRows, error } = await supabase.from("todos").insert(rowsToInsert).select("id,title");
+    const { error } = await supabase.from("todos").insert(rowsToInsert).select("id");
     setReminderSubmitting(false);
     if (error) {
       console.error("Reminder todo insert error", error);
@@ -1245,18 +1247,8 @@ export default function Home() {
       return;
     }
     setShowReminderModal(false);
-    fetchTodos();
+    await fetchTodos();
     addToast(t("reminder.reminderSet"));
-    if (insertedRows?.length) {
-      (async () => {
-        for (const row of insertedRows) {
-          const t = (row as { id: string; title: string });
-          const trans = await translateTaskTitle(t.title);
-          if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", t.id);
-        }
-        fetchTodos();
-      })();
-    }
   };
 
   const setReminderDateToFirst = () => {
@@ -1271,7 +1263,12 @@ export default function Home() {
       setReminderEditId(null);
       return;
     }
-    const { error } = await supabase.from("todos").update({ title: reminderEditTitle.trim() }).eq("id", reminderEditId);
+    const newTitle = reminderEditTitle.trim();
+    const trans = await translateTaskTitle(newTitle);
+    const { error } = await supabase
+      .from("todos")
+      .update({ title: newTitle, ...(trans && { translations: trans }) })
+      .eq("id", reminderEditId);
     if (error) {
       console.error("Reminder title update error", error);
       addToast(t("toast.reminderRenameFailed"));
@@ -1279,13 +1276,8 @@ export default function Home() {
     }
     setReminderEditId(null);
     setReminderEditTitle("");
-    fetchTodos();
+    await fetchTodos();
     addToast(t("toast.reminderRenamed"));
-    (async () => {
-      const trans = await translateTaskTitle(reminderEditTitle.trim());
-      if (trans) await supabase.from("todos").update({ translations: trans }).eq("id", reminderEditId);
-      fetchTodos();
-    })();
   };
 
   const handleReminderDelete = async (mode: "single" | "all", optionalId?: string) => {
