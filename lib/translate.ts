@@ -1,6 +1,6 @@
 /**
- * タスク名を他言語に翻訳する（/api/translate を呼ぶ）
- * モック時は同じ文字列が返る。本番では Google Translation API または DeepL を API ルート内で利用する想定。
+ * タスク名を他言語に翻訳する（/api/translate を呼ぶ）。
+ * APIキーは .env.local の DEEPL_API_KEY または GOOGLE_TRANSLATE_API_KEY で指定。未設定時は原文をそのまま返す。
  */
 export async function translateTaskTitle(text: string): Promise<Record<string, string> | null> {
   if (!text.trim()) return null;
