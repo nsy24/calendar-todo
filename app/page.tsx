@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil, ChevronDown, RefreshCw, ListTodo } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil, ChevronDown, RefreshCw, ListTodo, Calendar as CalendarIcon } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -1583,7 +1583,7 @@ export default function Home() {
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold shrink-0 tracking-tight text-slate-900">{t("app.title")}</h1>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-lg text-muted-foreground" aria-hidden>📅</span>
+              <CalendarIcon className="h-5 w-5 text-slate-800 shrink-0" aria-hidden />
               <select
                 value={currentCalendarId ?? ""}
                 onChange={(e) => setCurrentCalendarId(e.target.value || null)}
