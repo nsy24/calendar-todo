@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil, ChevronDown, RefreshCw } from "lucide-react";
+import { Trash2, Plus, LogOut, UserPlus, FileText, Copy, Bell, GripVertical, Clock, List, Pencil, ChevronDown, RefreshCw, ListTodo } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -28,6 +28,7 @@ import { validateUsername } from "@/lib/validation";
 import { translateTaskTitle } from "@/lib/translate";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Priority = "high" | "medium" | "low";
 
@@ -108,15 +109,20 @@ function SortableTodoRow({
   const displayText = (translated && translated.trim() !== "" ? translated : todo.text) || "";
   const showOriginalTip = Boolean(todo.translations && displayText !== todo.text);
   return (
-    <div
+    <motion.div
       ref={setNodeRef}
       style={style}
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -24, transition: { duration: 0.2 } }}
+      transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
       className={cn(
-        "flex items-center gap-3 p-3 rounded-2xl border border-slate-200/80 bg-white shadow-sm hover:bg-slate-50/80 transition-colors border-l-4",
+        "flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-white/80 backdrop-blur-md shadow-[0_20px_25px_-5px_rgba(0,0,0,0.06),0_8px_10px_-6px_rgba(0,0,0,0.04)] hover:bg-white/90 transition-colors border-l-4",
         useUsernameColors && todo.createdByUsername && usernameColorMap?.[todo.createdByUsername]
           ? usernameColorMap[todo.createdByUsername]
           : "border-l-slate-200",
-        isDragging && "opacity-95 shadow-md scale-[1.01] z-50 ring-2 ring-slate-300/50"
+        isDragging && "opacity-95 shadow-lg scale-[1.01] z-50 ring-2 ring-slate-300/50"
       )}
     >
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none p-1 -m-1 rounded">
@@ -134,7 +140,7 @@ function SortableTodoRow({
       <select
         value={todo.priority}
         onChange={(e) => onChangePriority(todo.id, e.target.value as Priority)}
-        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600"
+        className="rounded-lg border border-slate-100 bg-white/90 backdrop-blur-sm px-2 py-1 text-xs text-slate-600"
         title={t("priority.changePriority")}
       >
         <option value="high">{priorityLabel("high")}</option>
@@ -144,7 +150,7 @@ function SortableTodoRow({
       <Button variant="ghost" size="icon" onClick={() => onDelete(todo.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
         <Trash2 className="h-4 w-4" />
       </Button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1875,7 +1881,7 @@ export default function Home() {
               <Calendar selectedDate={selectedDate} onDateSelect={setSelectedDate} />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-white/75 backdrop-blur-xl border-slate-100 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.08)]">
             <CardHeader>
               <CardTitle>{format(selectedDate, "PPP", { locale: dateFnsLocale })}{t("todo.title")}</CardTitle>
             </CardHeader>
@@ -1928,45 +1934,57 @@ export default function Home() {
               </div>
               <div className="space-y-2">
                 {selectedDateTodos.length === 0 ? (
-                  <p className="text-slate-500 text-center py-8 text-sm">{t("todo.empty")}</p>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex flex-col items-center justify-center py-12 px-4 text-center"
+                  >
+                    <div className="rounded-2xl bg-slate-100/80 p-5 mb-4">
+                      <ListTodo className="h-12 w-12 text-slate-300" strokeWidth={1.2} />
+                    </div>
+                    <p className="text-slate-600 font-medium text-lg mb-1">{t("todo.emptyStateTitle")}</p>
+                    <p className="text-slate-400 text-sm">{t("todo.empty")}</p>
+                  </motion.div>
                 ) : (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={selectedDateTodos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                      {(() => {
-                        const list = selectedDateTodos;
-                        const adIndex = list.length >= 3 ? Math.floor(list.length / 2) : -1;
-                        const first = adIndex >= 0 ? list.slice(0, adIndex) : list;
-                        const second = adIndex >= 0 ? list.slice(adIndex) : [];
-                        return (
-                          <>
-                            {first.map((todo) => (
-                              <SortableTodoRow
-                                key={todo.id}
-                                todo={todo}
-                                useUsernameColors={useUsernameColors}
-                                usernameColorMap={usernameColorMap}
-                                getAvatarSeedForUsername={getAvatarSeedForUsername}
-                                onToggle={handleToggleTodo}
-                                onChangePriority={handleChangePriority}
-                                onDelete={handleDeleteTodo}
-                              />
-                            ))}
-                            {adIndex >= 0 && <AdsCard className="my-2" />}
-                            {second.map((todo) => (
-                              <SortableTodoRow
-                                key={todo.id}
-                                todo={todo}
-                                useUsernameColors={useUsernameColors}
-                                usernameColorMap={usernameColorMap}
-                                getAvatarSeedForUsername={getAvatarSeedForUsername}
-                                onToggle={handleToggleTodo}
-                                onChangePriority={handleChangePriority}
-                                onDelete={handleDeleteTodo}
-                              />
-                            ))}
-                          </>
-                        );
-                      })()}
+                      <AnimatePresence initial={false}>
+                        {(() => {
+                          const list = selectedDateTodos;
+                          const adIndex = list.length >= 3 ? Math.floor(list.length / 2) : -1;
+                          const first = adIndex >= 0 ? list.slice(0, adIndex) : list;
+                          const second = adIndex >= 0 ? list.slice(adIndex) : [];
+                          return (
+                            <>
+                              {first.map((todo) => (
+                                <SortableTodoRow
+                                  key={todo.id}
+                                  todo={todo}
+                                  useUsernameColors={useUsernameColors}
+                                  usernameColorMap={usernameColorMap}
+                                  getAvatarSeedForUsername={getAvatarSeedForUsername}
+                                  onToggle={handleToggleTodo}
+                                  onChangePriority={handleChangePriority}
+                                  onDelete={handleDeleteTodo}
+                                />
+                              ))}
+                              {adIndex >= 0 && <AdsCard className="my-2" />}
+                              {second.map((todo) => (
+                                <SortableTodoRow
+                                  key={todo.id}
+                                  todo={todo}
+                                  useUsernameColors={useUsernameColors}
+                                  usernameColorMap={usernameColorMap}
+                                  getAvatarSeedForUsername={getAvatarSeedForUsername}
+                                  onToggle={handleToggleTodo}
+                                  onChangePriority={handleChangePriority}
+                                  onDelete={handleDeleteTodo}
+                                />
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </AnimatePresence>
                     </SortableContext>
                   </DndContext>
                 )}

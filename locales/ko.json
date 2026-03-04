@@ -91,6 +91,7 @@
     "title": " 할 일",
     "addPlaceholder": "새 할 일 추가...",
     "empty": "이 날에는 할 일이 없습니다",
+    "emptyStateTitle": "오늘은 무엇을 할까요?",
     "reminderSetting": "리마인더",
     "reminderList": "리마인더 목록",
     "originalText": "원문"

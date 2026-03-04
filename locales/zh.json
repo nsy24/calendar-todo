@@ -91,6 +91,7 @@
     "title": " 的待办",
     "addPlaceholder": "添加新待办...",
     "empty": "当天无待办",
+    "emptyStateTitle": "今天要做些什么呢？",
     "reminderSetting": "提醒",
     "reminderList": "提醒列表",
     "originalText": "原文"

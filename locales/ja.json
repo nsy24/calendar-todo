@@ -91,6 +91,7 @@
     "title": "のTodo",
     "addPlaceholder": "新しいTodoを追加...",
     "empty": "この日にはTodoがありません",
+    "emptyStateTitle": "今日は何をしますか？",
     "reminderSetting": "リマインド設定",
     "reminderList": "リマインド一覧",
     "originalText": "原文"

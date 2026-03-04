@@ -91,6 +91,7 @@
     "title": " Todo",
     "addPlaceholder": "Add new todo...",
     "empty": "No todos on this day",
+    "emptyStateTitle": "What will you do today?",
     "reminderSetting": "Reminder",
     "reminderList": "Reminder list",
     "originalText": "Original text"
