@@ -16,7 +16,7 @@ export async function translateTaskTitle(text: string): Promise<Record<string, s
     let errMsg: string;
     try {
       const j = JSON.parse(body);
-      errMsg = j?.error ?? body || `HTTP ${res.status}`;
+      errMsg = (j?.error ?? body) || `HTTP ${res.status}`;
     } catch {
       errMsg = body || `HTTP ${res.status}`;
     }
