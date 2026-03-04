@@ -192,6 +192,7 @@
     "reminderDeleteFailed": "삭제에 실패했습니다",
     "reminderDeleted": "1건 삭제했습니다",
     "reminderBulkDeleteFailed": "일괄 삭제에 실패했습니다",
-    "avatarUpdateFailed": "아바타 업데이트에 실패했습니다"
+    "avatarUpdateFailed": "아바타 업데이트에 실패했습니다",
+    "translationFailed": "번역에 실패했습니다"
   }
 }

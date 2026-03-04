@@ -192,6 +192,7 @@
     "reminderDeleteFailed": "削除に失敗しました",
     "reminderDeleted": "1件削除しました",
     "reminderBulkDeleteFailed": "一括削除に失敗しました",
-    "avatarUpdateFailed": "アバターの更新に失敗しました"
+    "avatarUpdateFailed": "アバターの更新に失敗しました",
+    "translationFailed": "翻訳に失敗しました"
   }
 }

@@ -1025,7 +1025,13 @@ export default function Home() {
     const title = newTodoText.trim();
     const date = format(selectedDate, "yyyy-MM-dd");
     try {
-      const trans = await translateTaskTitle(title);
+      let trans: Record<string, string> | null = null;
+      try {
+        trans = await translateTaskTitle(title);
+      } catch (e) {
+        console.error("translateTaskTitle error", e);
+        addToast(t("toast.translationFailed"));
+      }
       const { data, error } = await supabase
         .from("todos")
         .insert([
@@ -1104,7 +1110,13 @@ export default function Home() {
       const nextDateStr = format(isLastDay ? endOfMonth(nextMonthDate) : nextMonthDate, "yyyy-MM-dd");
       const reminderTimeVal = target.reminderTime ? `${target.reminderTime}:00` : null;
       const nextUserId = target.userId ?? session.user.id;
-      const trans = await translateTaskTitle(target.text);
+      let trans: Record<string, string> | null = null;
+      try {
+        trans = await translateTaskTitle(target.text);
+      } catch (e) {
+        console.error("translateTaskTitle error (monthly)", e);
+        addToast(t("toast.translationFailed"));
+      }
       await supabase.from("todos").insert([
         {
           title: target.text,
@@ -1206,7 +1218,13 @@ export default function Home() {
       const firstDate = getNextOccurrenceOfDay(reminderDayOfMonth, now);
       const isLastDayOfMonth = reminderDayOfMonth <= 0 || firstDate.getDate() === endOfMonth(firstDate).getDate();
       const dateStr = format(isLastDayOfMonth ? endOfMonth(firstDate) : firstDate, "yyyy-MM-dd");
-      const trans = await translateTaskTitle(title);
+      let trans: Record<string, string> | null = null;
+      try {
+        trans = await translateTaskTitle(title);
+      } catch (e) {
+        console.error("translateTaskTitle error (reminder monthly)", e);
+        addToast(t("toast.translationFailed"));
+      }
       rowsToInsert.push({
         title,
         date: dateStr,
@@ -1223,7 +1241,13 @@ export default function Home() {
     } else {
       const taskDateStr = reminderMode === "date" ? reminderDate : format(selectedDate, "yyyy-MM-dd");
       const reminderDateVal = reminderMode === "date" ? (reminderDate || taskDateStr) : taskDateStr;
-      const trans = await translateTaskTitle(title);
+      let trans: Record<string, string> | null = null;
+      try {
+        trans = await translateTaskTitle(title);
+      } catch (e) {
+        console.error("translateTaskTitle error (reminder)", e);
+        addToast(t("toast.translationFailed"));
+      }
       rowsToInsert.push({
         title,
         date: taskDateStr,
@@ -1264,7 +1288,13 @@ export default function Home() {
       return;
     }
     const newTitle = reminderEditTitle.trim();
-    const trans = await translateTaskTitle(newTitle);
+    let trans: Record<string, string> | null = null;
+    try {
+      trans = await translateTaskTitle(newTitle);
+    } catch (e) {
+      console.error("translateTaskTitle error (edit)", e);
+      addToast(t("toast.translationFailed"));
+    }
     const { error } = await supabase
       .from("todos")
       .update({ title: newTitle, ...(trans && { translations: trans }) })

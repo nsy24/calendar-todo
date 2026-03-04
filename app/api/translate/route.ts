@@ -95,8 +95,11 @@ async function translateWithGoogle(
 
 /**
  * 入力テキストを ja / en / zh / ko の4言語分に翻訳し、JSONB 用のオブジェクトで返す。
- * APIキーは .env.local の DEEPL_API_KEY または GOOGLE_TRANSLATE_API_KEY から読み込む。
- * - DEEPL_API_KEY が設定されていれば DeepL を使用（推奨: 無料枠は DEEPL_API_URL に https://api-free.deepl.com を指定）
+ *
+ * 環境変数（APIルートはサーバーサイドのため process.env で参照）:
+ * - ローカル: .env.local の DEEPL_API_KEY または GOOGLE_TRANSLATE_API_KEY
+ * - Vercel: プロジェクト設定 > Environment Variables に追加（Build/Runtime で利用可能。クライアントに公開しない）
+ * - DEEPL_API_KEY が設定されていれば DeepL を使用（無料枠は DEEPL_API_URL 未設定で api-free.deepl.com）
  * - それ以外で GOOGLE_TRANSLATE_API_KEY が設定されていれば Google Cloud Translation を使用
  * - どちらも未設定の場合はモック（原文を全言語でそのまま返す）
  */
@@ -110,10 +113,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
     }
 
-    const translations: Record<string, string> = {};
     const deeplKey = process.env.DEEPL_API_KEY?.trim();
     const googleKey = process.env.GOOGLE_TRANSLATE_API_KEY?.trim();
     const deeplUrl = (process.env.DEEPL_API_URL || "https://api-free.deepl.com").replace(/\/$/, "");
+
+    console.log("[translate] env check", {
+      DEEPL_API_KEY: deeplKey ? "set" : "not set",
+      GOOGLE_TRANSLATE_API_KEY: googleKey ? "set" : "not set",
+      DEEPL_API_URL: deeplUrl,
+      provider: deeplKey ? "DeepL" : googleKey ? "Google" : "mock",
+    });
+
+    const translations: Record<string, string> = {};
 
     for (const lang of SUPPORTED_LANGS) {
       if (lang === sourceLang) {

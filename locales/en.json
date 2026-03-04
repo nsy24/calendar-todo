@@ -192,6 +192,7 @@
     "reminderDeleteFailed": "Failed to delete",
     "reminderDeleted": "1 deleted",
     "reminderBulkDeleteFailed": "Bulk delete failed",
-    "avatarUpdateFailed": "Failed to update avatar"
+    "avatarUpdateFailed": "Failed to update avatar",
+    "translationFailed": "Translation failed"
   }
 }

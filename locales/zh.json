@@ -192,6 +192,7 @@
     "reminderDeleteFailed": "删除失败",
     "reminderDeleted": "已删除 1 项",
     "reminderBulkDeleteFailed": "批量删除失败",
-    "avatarUpdateFailed": "头像更新失败"
+    "avatarUpdateFailed": "头像更新失败",
+    "translationFailed": "翻译失败"
   }
 }
