@@ -30,6 +30,11 @@ export default function RootLayout({
     <html lang="ja">
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7962950814771832"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className={`${inter.className} bg-slate-50 flex flex-col min-h-screen`}>
         <I18nProvider>
