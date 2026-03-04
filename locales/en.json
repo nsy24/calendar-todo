@@ -195,5 +195,32 @@
     "reminderBulkDeleteFailed": "Bulk delete failed",
     "avatarUpdateFailed": "Failed to update avatar",
     "translationFailed": "Translation failed"
+  },
+  "legal": {
+    "footerPrivacy": "Privacy Policy",
+    "footerTerms": "Terms of Service",
+    "backToTop": "Back to top",
+    "privacyTitle": "Privacy Policy",
+    "privacy": {
+      "adsenseTitle": "Google AdSense",
+      "adsenseBody": "This site uses Google AdSense for third-party ad serving. Ad providers may use cookies to show ads based on your interests. You can disable personalized ads in your ad settings.\n\nFor how Google uses cookies in advertising, please see Google's policy and partner policies.",
+      "cookiesTitle": "Use of Cookies",
+      "cookiesBody": "We may use cookies to improve convenience and analyze access. Cookies are small text data stored in your browser. You can disable cookies in your browser settings; some features may not work if you do.",
+      "analyticsTitle": "Google Analytics (Future Use)",
+      "analyticsBody": "We may use tools such as Google Analytics for access analysis in the future. In that case, we may use cookies to collect traffic data. We will update this policy and notify you when we start using such tools.",
+      "personalTitle": "Personal Information",
+      "personalBody": "We may collect personal information such as your email address when you register. We use it only to provide and operate the service, respond to inquiries, and for purposes set out in this policy. We do not provide it to third parties without your consent, except as required by law."
+    },
+    "termsTitle": "Terms of Service",
+    "terms": {
+      "useTitle": "Terms of Use",
+      "useBody": "These terms apply to your use of SyncTask (the \"Service\"). By using the Service, you agree to these terms. The Service provides task management and calendar features. Please use it appropriately.",
+      "translationTitle": "Translation Disclaimer",
+      "translationBody": "The Service offers automatic translation of task names (e.g. Google Translation API or DeepL). We do not guarantee the accuracy or completeness of translations. Please use them as a reference and verify important content against the original text.",
+      "prohibitedTitle": "Prohibited Conduct",
+      "prohibitedBody": "You may not: gain unauthorized access or use another user's account; disrupt the operation of the Service; violate laws or public order; or engage in any other conduct we deem inappropriate. We may suspend your account if we find a violation.",
+      "disclaimerTitle": "Disclaimer",
+      "disclaimerBody": "The Service is provided as is. We are not liable beyond what is permitted by law for changes, suspension, or termination of the Service, or for damages arising from its use."
+    }
   }
 }

@@ -195,5 +195,32 @@
     "reminderBulkDeleteFailed": "批量删除失败",
     "avatarUpdateFailed": "头像更新失败",
     "translationFailed": "翻译失败"
+  },
+  "legal": {
+    "footerPrivacy": "隐私政策",
+    "footerTerms": "服务条款",
+    "backToTop": "返回顶部",
+    "privacyTitle": "隐私政策",
+    "privacy": {
+      "adsenseTitle": "关于 Google AdSense 广告",
+      "adsenseBody": "本站使用 Google AdSense 进行第三方广告投放。广告商可能使用 Cookie 根据您的兴趣展示广告。您可以在广告设置中关闭个性化广告。\n\n关于 Google 在广告中使用 Cookie 的说明，请参阅 Google 的政策及合作伙伴政策。",
+      "cookiesTitle": "关于 Cookie 的使用",
+      "cookiesBody": "为提升便利性及进行访问分析，我们可能会使用 Cookie。Cookie 是存储在浏览器中的小型文本数据。您可以在浏览器设置中禁用 Cookie，但部分功能可能无法使用。",
+      "analyticsTitle": "关于 Google Analytics（将来使用）",
+      "analyticsBody": "我们将来可能使用 Google Analytics 等工具进行访问分析。届时可能会使用 Cookie 收集流量数据。开始使用时将更新本政策并通知您。",
+      "personalTitle": "关于个人信息的处理",
+      "personalBody": "在您注册账户时，我们可能会收集电子邮件等个人信息。我们仅在提供服务与运营、回应咨询以及本政策所载目的范围内使用。除法律要求外，未经您同意不会向第三方提供。"
+    },
+    "termsTitle": "服务条款",
+    "terms": {
+      "useTitle": "服务利用条件",
+      "useBody": "本规约适用于 SyncTask（以下简称「本服务」）的利用。使用本服务即视为同意本规约。本服务提供任务管理与日历相关功能，请合理使用。",
+      "translationTitle": "关于翻译功能的免责声明",
+      "translationBody": "本服务提供任务名称的自动翻译功能（如 Google Translation API 或 DeepL）。我们不保证翻译的准确性或完整性，请作为参考使用，重要内容请以原文为准。",
+      "prohibitedTitle": "禁止事项",
+      "prohibitedBody": "用户不得进行以下行为：未经授权访问或使用他人账户；妨碍本服务运营；违反法律或公序良俗；以及我们认定的其他不当行为。若发现违规，我们可能采取停止账户等措施。",
+      "disclaimerTitle": "运营方免责",
+      "disclaimerBody": "本服务按现状提供。对于服务内容的变更、中断或终止，或因使用而产生的损害，运营方除法律允许的范围外不承担责任。"
+    }
   }
 }
