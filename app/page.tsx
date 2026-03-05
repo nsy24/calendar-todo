@@ -225,6 +225,8 @@ export default function Home() {
   const [receivedInvitations, setReceivedInvitations] = useState<ReceivedInvitation[]>([]);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const [heroCatchphraseIndex, setHeroCatchphraseIndex] = useState(0);
+  const [showLoginForm, setShowLoginForm] = useState(false);
+  const authSectionRef = useRef<HTMLDivElement>(null);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1484,10 +1486,60 @@ export default function Home() {
   }
 
   if (!session) {
+    const lpCatchphrases = [
+      t("app.heroCatchphraseJa"),
+      t("app.heroCatchphraseEn"),
+      t("app.heroCatchphraseZh"),
+      t("app.heroCatchphraseKo"),
+    ];
     return (
-      <div className="min-h-screen bg-slate-50 p-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-center mb-2">{t("app.title")}</h1>
-        <LoginForm />
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <header className="shrink-0 border-b border-slate-100 bg-white/80 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-4 py-4 md:px-8 flex items-center justify-center md:justify-start">
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">{t("app.title")}</h1>
+          </div>
+        </header>
+        <main className="flex-1 p-4 md:p-8">
+          <div className="max-w-6xl mx-auto">
+            <section
+              className="relative rounded-2xl overflow-hidden mb-8 py-14 md:py-20 px-6 md:px-10 text-center bg-gradient-to-br from-slate-100 via-white to-slate-50 border border-slate-100/80 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.06)]"
+              aria-label="Hero"
+            >
+              <div className="relative z-10">
+                <div className="min-h-[4.5rem] md:min-h-[5rem] flex items-center justify-center mb-8">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.p
+                      key={heroCatchphraseIndex}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+                      className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-800 tracking-tight"
+                    >
+                      {lpCatchphrases[heroCatchphraseIndex]}
+                    </motion.p>
+                  </AnimatePresence>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLoginForm(true);
+                    setTimeout(() => authSectionRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                  }}
+                  className="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-slate-800 bg-white/70 backdrop-blur-md border border-slate-200/80 shadow-[0_4px_14px_rgba(0,0,0,0.06)] hover:bg-white/90 hover:border-slate-200 transition-all duration-200"
+                >
+                  {t("app.heroCta")}
+                </button>
+              </div>
+            </section>
+
+            {showLoginForm && (
+              <section ref={authSectionRef} className="max-w-sm mx-auto mt-10">
+                <LoginForm />
+              </section>
+            )}
+          </div>
+        </main>
       </div>
     );
   }
@@ -1585,46 +1637,10 @@ export default function Home() {
     addToast(t("settings.avatarUpdated"));
   };
 
-  const heroCatchphrases = [
-    t("app.heroCatchphraseJa"),
-    t("app.heroCatchphraseEn"),
-    t("app.heroCatchphraseZh"),
-    t("app.heroCatchphraseKo"),
-  ];
-
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
-        <section
-          className="relative rounded-2xl overflow-hidden mb-8 py-14 md:py-20 px-6 md:px-10 text-center bg-gradient-to-br from-slate-100 via-white to-slate-50 border border-slate-100/80 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.06)]"
-          aria-label="Hero"
-        >
-          <div className="relative z-10">
-            <div className="min-h-[4.5rem] md:min-h-[5rem] flex items-center justify-center mb-8">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.p
-                  key={heroCatchphraseIndex}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
-                  className="text-2xl md:text-4xl lg:text-5xl font-bold text-slate-800 tracking-tight"
-                >
-                  {heroCatchphrases[heroCatchphraseIndex]}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-            <button
-              type="button"
-              onClick={() => document.getElementById("app-main")?.scrollIntoView({ behavior: "smooth" })}
-              className="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-slate-800 bg-white/70 backdrop-blur-md border border-slate-200/80 shadow-[0_4px_14px_rgba(0,0,0,0.06)] hover:bg-white/90 hover:border-slate-200 transition-all duration-200"
-            >
-              {t("app.heroCta")}
-            </button>
-          </div>
-        </section>
-
-        <div id="app-main" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold shrink-0 tracking-tight text-slate-900">{t("app.title")}</h1>
             <div className="flex items-center gap-2 shrink-0">
