@@ -1,6 +1,11 @@
 {
   "app": {
     "title": "SyncTask",
+    "heroCatchphraseJa": "世界を繋ぐ、次世代型タスク管理",
+    "heroCatchphraseEn": "Next-gen task management that connects the world",
+    "heroCatchphraseZh": "连接世界，下一代任务管理",
+    "heroCatchphraseKo": "세상을 잇는, 차세대 태스크 관리",
+    "heroCta": "立即开始",
     "loading": "加载中...",
     "cancel": "取消",
     "save": "保存",
