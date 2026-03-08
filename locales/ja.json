@@ -201,9 +201,34 @@
     "avatarUpdateFailed": "アバターの更新に失敗しました",
     "translationFailed": "翻訳に失敗しました"
   },
+  "about": {
+    "title": "運営者情報",
+    "operator": "運営者",
+    "operatorName": "Nexora",
+    "skills": "専門スキル",
+    "skillsList": "デジタルマーケティング / 広告運用 / ソフトウェア開発 / 動画制作 / Web制作 / SNS運用",
+    "contactLabel": "お問い合わせはこちら"
+  },
+  "contact": {
+    "title": "お問い合わせ",
+    "nameLabel": "お名前",
+    "namePlaceholder": "山田 太郎",
+    "emailLabel": "メールアドレス",
+    "emailPlaceholder": "example@email.com",
+    "subjectLabel": "件名",
+    "subjectPlaceholder": "お問い合わせの内容を簡潔に",
+    "messageLabel": "お問い合わせ内容",
+    "messagePlaceholder": "ご質問・ご要望をご記入ください",
+    "submitLabel": "Nexoraに送信する",
+    "sending": "送信中...",
+    "sent": "送信しました。ご連絡ありがとうございます。",
+    "error": "送信に失敗しました。しばらくしてからお試しください。"
+  },
   "legal": {
     "footerPrivacy": "プライバシーポリシー",
     "footerTerms": "利用規約",
+    "footerAbout": "運営者情報",
+    "footerContact": "お問い合わせ",
     "backToTop": "トップへ",
     "privacyTitle": "プライバシーポリシー",
     "privacy": {

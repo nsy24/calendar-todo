@@ -201,9 +201,34 @@
     "avatarUpdateFailed": "Failed to update avatar",
     "translationFailed": "Translation failed"
   },
+  "about": {
+    "title": "About Us",
+    "operator": "Operator",
+    "operatorName": "Nexora",
+    "skills": "Expertise",
+    "skillsList": "Digital Marketing / Ad Operations / Software Development / Video Production / Web Design / SNS Management",
+    "contactLabel": "Contact us"
+  },
+  "contact": {
+    "title": "Contact",
+    "nameLabel": "Name",
+    "namePlaceholder": "John Doe",
+    "emailLabel": "Email",
+    "emailPlaceholder": "example@email.com",
+    "subjectLabel": "Subject",
+    "subjectPlaceholder": "Brief description of your inquiry",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Please enter your question or feedback",
+    "submitLabel": "Send to Nexora",
+    "sending": "Sending...",
+    "sent": "Message sent. Thank you for contacting us.",
+    "error": "Failed to send. Please try again later."
+  },
   "legal": {
     "footerPrivacy": "Privacy Policy",
     "footerTerms": "Terms of Service",
+    "footerAbout": "About",
+    "footerContact": "Contact",
     "backToTop": "Back to top",
     "privacyTitle": "Privacy Policy",
     "privacy": {

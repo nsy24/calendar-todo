@@ -201,9 +201,34 @@
     "avatarUpdateFailed": "아바타 업데이트에 실패했습니다",
     "translationFailed": "번역에 실패했습니다"
   },
+  "about": {
+    "title": "운영자 정보",
+    "operator": "운영자",
+    "operatorName": "Nexora",
+    "skills": "전문 분야",
+    "skillsList": "디지털 마케팅 / 광고 운영 / 소프트웨어 개발 / 영상 제작 / 웹 제작 / SNS 운영",
+    "contactLabel": "문의하기"
+  },
+  "contact": {
+    "title": "문의하기",
+    "nameLabel": "이름",
+    "namePlaceholder": "홍길동",
+    "emailLabel": "이메일",
+    "emailPlaceholder": "example@email.com",
+    "subjectLabel": "제목",
+    "subjectPlaceholder": "문의 내용을 간단히",
+    "messageLabel": "문의 내용",
+    "messagePlaceholder": "질문이나 의견을 입력해 주세요",
+    "submitLabel": "Nexora에 보내기",
+    "sending": "전송 중...",
+    "sent": "전송되었습니다. 연락해 주셔서 감사합니다.",
+    "error": "전송에 실패했습니다. 나중에 다시 시도해 주세요."
+  },
   "legal": {
     "footerPrivacy": "개인정보 처리방침",
     "footerTerms": "이용약관",
+    "footerAbout": "운영자 정보",
+    "footerContact": "문의하기",
     "backToTop": "처음으로",
     "privacyTitle": "개인정보 처리방침",
     "privacy": {

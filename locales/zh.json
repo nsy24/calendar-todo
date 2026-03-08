@@ -201,9 +201,34 @@
     "avatarUpdateFailed": "头像更新失败",
     "translationFailed": "翻译失败"
   },
+  "about": {
+    "title": "运营者信息",
+    "operator": "运营者",
+    "operatorName": "Nexora",
+    "skills": "专业领域",
+    "skillsList": "数字营销 / 广告运营 / 软件开发 / 视频制作 / 网页制作 / SNS运营",
+    "contactLabel": "联系我们"
+  },
+  "contact": {
+    "title": "联系我们",
+    "nameLabel": "姓名",
+    "namePlaceholder": "张三",
+    "emailLabel": "邮箱",
+    "emailPlaceholder": "example@email.com",
+    "subjectLabel": "主题",
+    "subjectPlaceholder": "请简要说明咨询内容",
+    "messageLabel": "咨询内容",
+    "messagePlaceholder": "请输入您的问题或意见",
+    "submitLabel": "发送至 Nexora",
+    "sending": "发送中...",
+    "sent": "已发送。感谢您的联系。",
+    "error": "发送失败，请稍后重试。"
+  },
   "legal": {
     "footerPrivacy": "隐私政策",
     "footerTerms": "服务条款",
+    "footerAbout": "运营者信息",
+    "footerContact": "联系我们",
     "backToTop": "返回顶部",
     "privacyTitle": "隐私政策",
     "privacy": {
