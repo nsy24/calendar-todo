@@ -4,7 +4,8 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = "onboarding@resend.dev";
-const TO = process.env.CONTACT_EMAIL ?? "";
+/** お問い合わせの送信先（ここにメールアドレスを記載） */
+const TO = "YOUR_EMAIL@example.com";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +30,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!TO) {
-      console.error("[send] CONTACT_EMAIL is not set (送信先メールアドレス)");
+    if (!TO || TO === "YOUR_EMAIL@example.com") {
+      console.error("[send] 送信先メールアドレスが未設定です。app/api/send/route.ts の TO を編集してください。");
       return NextResponse.json(
         { error: "Recipient email is not configured" },
         { status: 500 }
