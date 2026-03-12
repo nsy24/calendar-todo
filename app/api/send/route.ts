@@ -5,7 +5,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = "onboarding@resend.dev";
 /** お問い合わせの送信先（ここにメールアドレスを記載） */
-const TO = "YOUR_EMAIL@example.com";
+const TO = "nexora.tokyo@gmail.com";
 
 export async function POST(request: NextRequest) {
   try {
