@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await resend.emails.send({
       from: FROM,
-      to: [TO],
+      to: ["nexora.tokyo@gmail.com"],
       replyTo: email,
       subject: `[お問い合わせ] ${subject}`,
       html,
