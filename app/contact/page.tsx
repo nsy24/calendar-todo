@@ -19,8 +19,15 @@ export default function ContactPage() {
     e.preventDefault();
     setStatus("sending");
     try {
-      // 実際の送信先（API・メール送信等）に差し替え可能
-      await new Promise((r) => setTimeout(r, 800));
+      const res = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Send failed");
+      }
       setStatus("sent");
       setName("");
       setEmail("");
