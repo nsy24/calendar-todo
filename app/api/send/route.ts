@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!TO || TO === "YOUR_EMAIL@example.com") {
+    if (!TO || TO === "nexora.tokyo@gmail.com") {
       console.error("[send] 送信先メールアドレスが未設定です。app/api/send/route.ts の TO を編集してください。");
       return NextResponse.json(
         { error: "Recipient email is not configured" },
