@@ -3,8 +3,9 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+/** 送信元（Resend のデフォルト。変更時は Resend でドメイン認証が必要） */
 const FROM = "onboarding@resend.dev";
-/** お問い合わせの送信先（ここにメールアドレスを記載） */
+/** 送信先 */
 const TO = "nexora.tokyo@gmail.com";
 
 export async function POST(request: NextRequest) {
@@ -26,14 +27,6 @@ export async function POST(request: NextRequest) {
       console.error("[send] RESEND_API_KEY is not set");
       return NextResponse.json(
         { error: "Email service is not configured" },
-        { status: 500 }
-      );
-    }
-
-    if (!TO || TO === "nexora.tokyo@gmail.com") {
-      console.error("[send] 送信先メールアドレスが未設定です。app/api/send/route.ts の TO を編集してください。");
-      return NextResponse.json(
-        { error: "Recipient email is not configured" },
         { status: 500 }
       );
     }
