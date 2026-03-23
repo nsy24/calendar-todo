@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { format, isSameDay, startOfWeek, endOfWeek, addMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ja as dateFnsJa, enUS as dateFnsEn, zhCN as dateFnsZh, ko as dateFnsKo } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
@@ -1609,6 +1610,21 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                <Link
+                  href="/guide"
+                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 bg-white/80 border border-slate-200 shadow-[0_4px_14px_rgba(0,0,0,0.05)] hover:bg-white transition-colors"
+                >
+                  詳しい使い方はガイドをご覧ください
+                </Link>
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+                >
+                  ご意見・ご相談はお問い合わせへ
+                </Link>
               </div>
             </section>
 

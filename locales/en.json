@@ -221,7 +221,8 @@
     "messagePlaceholder": "Please enter your question or feedback",
     "submitLabel": "Send to Nexora",
     "sending": "Sending...",
-    "sent": "Message sent. Thank you for contacting us.",
+    "sent": "Sent successfully.",
+    "sentDetail": "Message sent. Thank you for contacting us.",
     "error": "Failed to send. Please try again later."
   },
   "legal": {
