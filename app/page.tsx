@@ -1533,6 +1533,85 @@ export default function Home() {
               </div>
             </section>
 
+            <section className="mt-10">
+              <div className="flex items-start justify-between gap-4 flex-col md:flex-row md:items-center md:gap-6 mb-6">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">SyncTaskの主要機能</h2>
+                  <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed">
+                    ログイン前でも、カレンダー連携・ToDo管理・多言語翻訳の流れがひと目で分かるようにまとめました。
+                  </p>
+                </div>
+                <div className="w-full md:w-auto flex gap-2">
+                  <div className="rounded-xl border border-slate-100 bg-white/60 px-4 py-2 text-xs font-semibold text-slate-700 shadow-[0_4px_14px_rgba(0,0,0,0.04)]">
+                    使い方を先にチェック
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_20px_25px_-5px_rgba(0,0,0,0.06),0_8px_10px_-6px_rgba(0,0,0,0.04)] p-5">
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5 text-slate-800" aria-hidden />
+                    <h3 className="text-base font-semibold text-slate-900">カレンダー連携</h3>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+                    複数のカレンダー（仕事・家庭など）を作成し、タスクを日付に紐づけて管理できます。
+                    参加メンバーと共有しながら、全体の状況も見える形に保ちます。
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500">
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">日付ごと</span>
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">共有対応</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_20px_25px_-5px_rgba(0,0,0,0.06),0_8px_10px_-6px_rgba(0,0,0,0.04)] p-5">
+                  <div className="flex items-center gap-2">
+                    <ListTodo className="h-5 w-5 text-slate-800" aria-hidden />
+                    <h3 className="text-base font-semibold text-slate-900">ToDo管理</h3>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+                    タスクは追加・完了・削除がシンプル。優先度（高/中/低）で重要度を揃え、並び順は
+                    ドラッグ&ドロップで調整できます。通知やリマインダーにも対応しています。
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500">
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">優先度</span>
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">並び替え</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-white/70 backdrop-blur-md shadow-[0_20px_25px_-5px_rgba(0,0,0,0.06),0_8px_10px_-6px_rgba(0,0,0,0.04)] p-5">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-slate-800" aria-hidden />
+                    <h3 className="text-base font-semibold text-slate-900">多言語翻訳</h3>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+                    タスク名は表示言語に合わせて翻訳されます（必要に応じて原文も確認できます）。
+                    そのため、言語が違っても同じカレンダー・ToDoを共有しやすくなっています。
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500">
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">言語に追従</span>
+                    <span className="inline-flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 px-3 py-1">原文確認</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-100 bg-white/60 backdrop-blur-md p-6 md:p-7 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.06),0_8px_10px_-6px_rgba(0,0,0,0.04)]">
+                <div className="flex items-start gap-3">
+                  <Clock className="h-5 w-5 text-slate-800 shrink-0 mt-0.5" aria-hidden />
+                  <div>
+                    <h3 className="text-base md:text-lg font-bold text-slate-900">Nexoraがこのアプリを開発した理由</h3>
+                    <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed">
+                      SyncTaskは、予定とやることがバラバラになって「結局どこに入れたっけ？」が起きる状態を減らしたい想いから生まれました。
+                      カレンダーとToDoを同じ体験として扱い、優先度・並び替え・繰り返し・通知まで一連で運用できます。
+                      さらに、最初の設定で迷わない導線を用意し、操作の結果がすぐ伝わるようフィードバックにもこだわりました。
+                      さらに多言語翻訳で、言語の壁を越えて同じ情報を共有しやすくすることで、毎日使える実用ツールに育て続けています。
+                      Nexoraはこの体験を、チームや家族の“運用”に寄り添うプロダクトとして磨いています。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {showLoginForm && (
               <section ref={authSectionRef} className="max-w-sm mx-auto mt-10">
                 <LoginForm />
