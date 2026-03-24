@@ -224,9 +224,21 @@
     "sent": "已发送。感谢您的联系。",
     "error": "发送失败，请稍后重试。"
   },
+  "blog": {
+    "title": "SyncTask 博客",
+    "description": "分享 SyncTask 实战用法、工作流设计与 AdSense 审核相关的技术经验。",
+    "posts": {
+      "multilingual-productivity": "多语言任务管理应用为何能改变团队生产力",
+      "minimal-workflow-2026": "Nexora 提出的 2026 极简工作流",
+      "adsense-tech-stack": "Web 开发者分享：有助于 Google AdSense 审核的技术栈",
+      "seo-information-architecture": "支撑高价值内容的 SEO 信息架构实践",
+      "contact-conversion-design": "如何通过咨询入口设计提升网站信任度"
+    }
+  },
   "legal": {
     "footerPrivacy": "隐私政策",
     "footerTerms": "服务条款",
+    "footerBlog": "博客",
     "footerAbout": "运营者信息",
     "footerContact": "联系我们",
     "backToTop": "返回顶部",

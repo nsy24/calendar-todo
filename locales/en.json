@@ -225,9 +225,21 @@
     "sentDetail": "Message sent. Thank you for contacting us.",
     "error": "Failed to send. Please try again later."
   },
+  "blog": {
+    "title": "SyncTask Blog",
+    "description": "Practical insights on task operations, workflow design, and AdSense readiness.",
+    "posts": {
+      "multilingual-productivity": "Why Multilingual Task Management Transforms Team Productivity",
+      "minimal-workflow-2026": "Nexora's Minimal Workflow for 2026",
+      "adsense-tech-stack": "A Developer's Tech Stack for Google AdSense Review Readiness",
+      "seo-information-architecture": "Practical SEO Information Architecture for Useful Content",
+      "contact-conversion-design": "Designing Contact Paths That Build Trust"
+    }
+  },
   "legal": {
     "footerPrivacy": "Privacy Policy",
     "footerTerms": "Terms of Service",
+    "footerBlog": "Blog",
     "footerAbout": "About",
     "footerContact": "Contact",
     "backToTop": "Back to top",

@@ -225,9 +225,21 @@
     "sentDetail": "送信しました。ご連絡ありがとうございます。",
     "error": "送信に失敗しました。しばらくしてからお試しください。"
   },
+  "blog": {
+    "title": "SyncTask ブログ",
+    "description": "SyncTaskの活用法、ワークフロー設計、AdSense審査に役立つ実践知を発信します。",
+    "posts": {
+      "multilingual-productivity": "多言語対応タスク管理アプリがチームの生産性を変える理由",
+      "minimal-workflow-2026": "Nexoraが提案する、2026年のミニマルなワークフロー",
+      "adsense-tech-stack": "Web開発者が教える、Google AdSense審査に役立つ技術スタック",
+      "seo-information-architecture": "有用性の高いコンテンツを支える、SEO情報設計の実践",
+      "contact-conversion-design": "お問い合わせ導線の設計で信頼を高める方法"
+    }
+  },
   "legal": {
     "footerPrivacy": "プライバシーポリシー",
     "footerTerms": "利用規約",
+    "footerBlog": "ブログ",
     "footerAbout": "運営者情報",
     "footerContact": "お問い合わせ",
     "backToTop": "トップへ",
