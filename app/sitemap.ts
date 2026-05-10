@@ -14,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/contact`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
   ];
 
+  // content/blog/*.md をすべて列挙（記事追加時はここを手編集せず Markdown を置けば反映される）
   const blogPages: MetadataRoute.Sitemap = getAllBlogMeta().map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
     lastModified: post.updatedAt ? new Date(post.updatedAt) : new Date(post.publishedAt),
